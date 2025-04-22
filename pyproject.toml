@@ -3,9 +3,9 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "repo-indexer"
+name = "kno-sdk"
 version = "0.1.0"
-description = "Clone GitHub repos, build embeddings with OpenAI or SBERT, store in Chroma, and search."
+description = "Clone GitHub repos, build embeddings, store in Chroma, and search."
 readme = "README.md"
 license = { text = "MIT" }
 authors = [ { name="Your Name", email="you@example.com" } ]
