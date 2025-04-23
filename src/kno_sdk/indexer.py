@@ -293,9 +293,8 @@ def search(
             return 0
 
     latest_dir = max(cand_dirs, key=_ts)
-    print("TATA", latest_dir)
     embed_fn = OpenAIEmbeddings() if embedding.value=="OpenAIEmbeddings" else SBERTEmbeddings()
-    vs = Chroma(collection_name=repo_name,embedding_function=embed_fn,persist_directory="repos/NestJs-MovieApp/.kno/embedding_SBERTEmbeddings_1745390419075_74bbc9f")
+    vs = Chroma(collection_name=repo_name,embedding_function=embed_fn,persist_directory=str(latest_dir))
 
     return [d.page_content for d in vs.similarity_search(query, k=k)]
 
