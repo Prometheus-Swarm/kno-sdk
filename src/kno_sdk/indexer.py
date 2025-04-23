@@ -256,27 +256,33 @@ def clone_and_index(
 def search(
     repo_url: str,
     branch: str = "main",
-    embedding: str = "OpenAIEmbeddings",
+    embedding: EmbeddingMethod = EmbeddingMethod.SBERT,
     query: str = "",
     k: int = 8,
-    base_dir: Path = Path.cwd()
+    base_dir: str = str(Path.cwd())
 ) -> List[str]:
     """
     1. Clone/pull `repo_url`
     2. Load the existing `.kno/` Chroma DB
     3. Return the top‐k page_content for `query`
     """
+    print("BRANCG",branch)
     repo_name = repo_url.rstrip("/").split("/")[-1].removesuffix(".git")
-    repo_path = base_dir / repo_name
-    kno_dir = repo_path / ".kno"
+    repo_path = os.path.join(base_dir, repo_name)
+    kno_dir = os.path.join(repo_path, ".kno")
 
-    if not repo_path.exists():
+    if not pathlib.Path(repo_path).exists():
         Repo.clone_from(repo_url, repo_path, depth=1, branch=branch)
     else:
         Repo(repo_path).remotes.origin.pull(branch)
 
-    embed_fn = OpenAIEmbeddings() if embedding=="OpenAIEmbeddings" else SBERTEmbeddings()
-    vs = Chroma(collection_name=repo_name,embedding_function=embed_fn,persist_directory=kno_dir)
+    repo = Repo(repo_path)
+    commit    = repo.head.commit.hexsha[:7]
+    time_ms = int(time.time() * 1000)
+    subdir = f"embedding_{embedding.value}_{time_ms}_{commit}"
+    
+    embed_fn = OpenAIEmbeddings() if embedding.value=="OpenAIEmbeddings" else SBERTEmbeddings()
+    vs = Chroma(collection_name=repo_name,embedding_function=embed_fn,persist_directory=os.path.join(kno_dir,subdir))
 
-    docs = vs.similarity_search(query, n_results=k)
-    return [d.page_content for d in docs]
+    return [d.page_content for d in vs.similarity_search(query, k=k)]
+
