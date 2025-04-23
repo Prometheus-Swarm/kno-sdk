@@ -136,21 +136,6 @@ class EmbeddingMethod(str, Enum):
 
 Choose between OpenAI’s hosted embeddings or a local SBERT model.
 
-### RepoIndex
-
-```python
-class EmbeddingMethod(str, Enum):
-    OPENAI = "OpenAIEmbeddings"
-    SBERT  = "SBERTEmbeddings"
-```
-
-*   **path** — where the repository was cloned
-    
-*   **vector\_store** — live Chroma client for further queries
-    
-*   **digest** — human-readable directory listing (useful for context)
-    
-
 🔍 How It Works
 ---------------
 
