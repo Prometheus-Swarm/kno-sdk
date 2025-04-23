@@ -1,6 +1,7 @@
 import logging
 import pathlib
 import os
+import time
 
 from pathlib import Path
 from git import Repo
@@ -11,6 +12,7 @@ from langchain_chroma import Chroma
 from typing import Dict, List, Tuple
 from tree_sitter_languages import get_language
 from tree_sitter import Parser
+from enum import Enum
 
 Language = get_language
 logger = logging.getLogger(__name__)
@@ -184,10 +186,14 @@ def _build_directory_digest(
             break
     return "\n".join(lines)
     
+class EmbeddingMethod(str, Enum):
+    OPENAI = "OpenAIEmbeddings"
+    SBERT  = "SBERTEmbeddings"
+
 def clone_and_index(
     repo_url: str,
     branch: str = "main",
-    embedding: str = "openai",
+    embedding: EmbeddingMethod = EmbeddingMethod.SBERT,
     base_dir: str = str(Path.cwd())
 ) -> RepoIndex:
     """
@@ -195,10 +201,9 @@ def clone_and_index(
     2. Embed each file into a Chroma collection in `.kno/`
     3. Commit & push the `.kno/` folder back to `repo_url`.
     """
-    # if isinstance(base_dir, (str, os.PathLike)):
-    #     base_dir = pathlib.Path(base_dir)
-    # else: 
-    #     raise RuntimeError("Invalid Path");    
+    if isinstance(embedding, str):
+        embedding = EmbeddingMethod(embedding)  # raises ValueError if invalid
+    
     repo_name = repo_url.rstrip("/").split("/")[-1].removesuffix(".git")
     repo_path = os.path.join(base_dir, repo_name)
     kno_dir = os.path.join(repo_path, ".kno")
@@ -210,10 +215,14 @@ def clone_and_index(
     else:
         logger.info("Pulling latest on %s", repo_name)
         Repo(repo_path).remotes.origin.pull(branch)
+    repo = Repo(repo_path)
+    commit    = repo.head.commit.hexsha[:7]
+    time_ms = int(time.time() * 1000)
+    subdir = f"embedding_{embedding.value}_{time_ms}_{commit}"
 
     # 2. choose embedding
-    embed_fn = OpenAIEmbeddings() if embedding=="openai" else SBERTEmbeddings()
-    vs = Chroma(collection_name=repo_name,embedding_function=embed_fn,persist_directory=kno_dir)
+    embed_fn = OpenAIEmbeddings() if embedding.value=="OpenAIEmbeddings" else SBERTEmbeddings()
+    vs = Chroma(collection_name=repo_name,embedding_function=embed_fn,persist_directory=os.path.join(kno_dir,subdir))
     skip_dirs = {".git","node_modules","build","dist","target",".vscode",".kno"}
     skip_files= {"package-lock.json","yarn.lock",".prettierignore"}
     digest = _build_directory_digest(repo_path, skip_dirs, skip_files)
@@ -221,7 +230,6 @@ def clone_and_index(
     if vs._collection.count() == 0:
         logger.info("Indexing %s …", repo_name)
         texts, metas = [], []
-        
 
         for fp in pathlib.Path(repo_path).rglob("*.*"):
             if any(p in skip_dirs for p in fp.parts) or fp.name in skip_files:
@@ -237,7 +245,6 @@ def clone_and_index(
         logger.info("Embedded %d chunks", len(texts))
 
     # 4. commit & push .kno
-    repo = Repo(repo_path)
     # get path relative to repo root:
     relative_kno = os.path.relpath(str(kno_dir), str(repo_path))
     repo.git.add(str(relative_kno))
@@ -249,7 +256,7 @@ def clone_and_index(
 def search(
     repo_url: str,
     branch: str = "main",
-    embedding: str = "openai",
+    embedding: str = "OpenAIEmbeddings",
     query: str = "",
     k: int = 8,
     base_dir: Path = Path.cwd()
@@ -268,7 +275,7 @@ def search(
     else:
         Repo(repo_path).remotes.origin.pull(branch)
 
-    embed_fn = OpenAIEmbeddings() if embedding=="openai" else SBERTEmbeddings()
+    embed_fn = OpenAIEmbeddings() if embedding=="OpenAIEmbeddings" else SBERTEmbeddings()
     vs = Chroma(collection_name=repo_name,embedding_function=embed_fn,persist_directory=kno_dir)
 
     docs = vs.similarity_search(query, n_results=k)

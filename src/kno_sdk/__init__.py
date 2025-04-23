@@ -2,10 +2,11 @@
 
 __version__ = "0.1.1"
 
-from .indexer import clone_and_index, search, RepoIndex
+from .indexer import clone_and_index, search, RepoIndex, EmbeddingMethod
 
 __all__ = [
     "clone_and_index",
     "search",
     "RepoIndex",
+    "EmbeddingMethod"
 ]
