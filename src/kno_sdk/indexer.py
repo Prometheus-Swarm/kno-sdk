@@ -27,7 +27,7 @@ from langgraph.graph import StateGraph, END
 Language = get_language
 logger = logging.getLogger(__name__)
 TOKEN_LIMIT = 16_000  # per-chunk token cap
-MAX_ITERATIONS = 30;
+MAX_ITERATIONS = 30
 INDEX_CHUNK_LIMIT = 400
 
 LANG_NODE_TARGETS: Dict[str, Tuple[str, ...]] = {
@@ -138,6 +138,7 @@ PARSER_CACHE: Dict[str, Parser] = {
     for lang, lang_obj in LANGUAGE_CACHE.items()
 }
 
+
 class EmbeddingMethod(str, Enum):
     OPENAI = "OpenAIEmbedding"
     SBERT = "SBERTEmbedding"
@@ -157,6 +158,7 @@ class AgentConfig:
     model_name: str = "claude-3-haiku-20240307"
     temperature: float = 0.0
     embedding_function: str = "SBERTEmbedding"
+    max_tokens: int = 4096
 
 
 # ─────────────────────────── LLM PROVIDERS ────────────────────────────
@@ -171,9 +173,10 @@ class LLMProviderBase(BaseChatModel):
 class OpenAIProvider(ChatOpenAI, LLMProviderBase):
     provider_name: str = "openai"
 
+
 class AnthropicProvider(ChatAnthropic, LLMProviderBase):
     provider_name: str = "anthropic"
-    
+
 
 class RepoIndex:
     path: Path
@@ -210,13 +213,14 @@ class RepoIndex:
                 break
         return "\n".join(lines)
 
+
 # ───────────────────────────── TOOLS ────────────────────────────────
 
 
 def build_tools(index: RepoIndex, llm: LLMProviderBase) -> List[Tool]:
     """Return lightweight LangChain `Tool`s that close over *index*."""
 
-    def search_code(query: str,k:int = 6) -> str:
+    def search_code(query: str, k: int = 8) -> str:
         if not query or query.strip() == "":
             # Return directory structure instead of empty search
             return (
@@ -331,6 +335,7 @@ def _build_directory_digest(
             break
     return "\n".join(lines)
 
+
 # ────────────────────── LANGGRAPH STATE AND NODES ───────────────────────
 
 
@@ -340,6 +345,7 @@ class AgentState(TypedDict):
     messages: List[Dict[str, Any]]
     intermediate_steps: List[tuple]
     iterations: int
+
 
 def create_agent_graph(tools: List[Tool], llm: LLMProviderBase, system_message: str):
     """Create a LangGraph agent with the provided tools and LLM."""
@@ -453,7 +459,7 @@ def create_agent_graph(tools: List[Tool], llm: LLMProviderBase, system_message: 
                         "content": (
                             "I couldn’t recognise a tool call. "
                             "Reply either with valid\n"
-                            "```json\n{ \"action\": \"tool\", \"action_input\": … }\n```\n"
+                            '```json\n{ "action": "tool", "action_input": … }\n```\n'
                             "or finish with **Final Answer:**."
                         ),
                     }
@@ -467,9 +473,11 @@ def create_agent_graph(tools: List[Tool], llm: LLMProviderBase, system_message: 
         # ───── 4. ***Duplicate‑call guard*** – skip if same as last one ─────
         if state["intermediate_steps"]:
             prev_action, _ = state["intermediate_steps"][-1]
-            if (isinstance(prev_action, dict)
-                and prev_action.get("name")      == tool_name
-                and prev_action.get("arguments") == tool_input):
+            if (
+                isinstance(prev_action, dict)
+                and prev_action.get("name") == tool_name
+                and prev_action.get("arguments") == tool_input
+            ):
                 warn_msg = (
                     f"You already ran `{tool_name}` with that exact input. "
                     "I'll skip that and you can choose another action or finish with **Final Answer:**."
@@ -477,11 +485,10 @@ def create_agent_graph(tools: List[Tool], llm: LLMProviderBase, system_message: 
                 # Append a system message (not a new tool step), and do not bump iterations
                 return {
                     **state,
-                    "messages": state["messages"] + [
-                        {"role": "system", "content": warn_msg}
-                    ],
+                    "messages": state["messages"]
+                    + [{"role": "system", "content": warn_msg}],
                 }
-                
+
         # ---------- 5. execute the tool -----------------
         for tool in tools:
             if tool.name == tool_name:
@@ -521,6 +528,7 @@ def create_agent_graph(tools: List[Tool], llm: LLMProviderBase, system_message: 
             + [({"name": "error", "arguments": tool_call}, err_msg)],
             "iterations": state["iterations"] + 1,
         }
+
     # Routing function to decide next steps
     def should_continue(state: AgentState) -> str:
         # Check for final answer
@@ -531,8 +539,10 @@ def create_agent_graph(tools: List[Tool], llm: LLMProviderBase, system_message: 
         if state["iterations"] >= MAX_ITERATIONS:
             # force the model to wrap up instead of ending the graph
             state["messages"].append(
-                {"role": "user",
-                "content": "You have hit the step limit. Summarise now using 'Final Answer:'."}
+                {
+                    "role": "user",
+                    "content": "You have hit the step limit. Summarise now using 'Final Answer:'.",
+                }
             )
             return "continue"
         # Continue the loop
@@ -564,34 +574,21 @@ class AgentFactory:
                 model_name=cfg.model_name, temperature=cfg.temperature
             )
         elif cfg.llm_provider == "anthropic":
-            return AnthropicProvider(model=cfg.model_name, temperature=cfg.temperature, max_tokens_to_sample=4096)
+            return AnthropicProvider(
+                model=cfg.model_name,
+                temperature=cfg.temperature,
+                max_tokens_to_sample=cfg.max_tokens,
+            )
         raise ValueError(f"Unknown provider: {cfg.llm_provider}")
 
-    def create_agent(self, cfg: AgentConfig, base_dir: str = str(Path.cwd())):
-        index = clone_and_index(cfg.repo_url, cfg.branch, cfg.embedding_function, base_dir)
+    def create_agent(
+        self, cfg: AgentConfig, base_dir: str = str(Path.cwd()), system_prompt: str = ""
+    ):
+        index = clone_and_index(
+            cfg.repo_url, cfg.branch, cfg.embedding_function, base_dir
+        )
         llm = self._get_llm(cfg)
         tools = build_tools(index, llm)
-        system_prompt = f"""
-            You are a senior code‑analysis agent working **on the repository below**.
-
-            Repository: {cfg.repo_url}
-            Branch:     {cfg.branch}
-
-            Your tasks, in order:
-
-            1. **Answer the user's request.**
-            2. If you lack information, decide which tool to use to get it.
-            • `read_file` – to read code or config files  
-            • `search_code` – semantic search across the repo  
-
-            When you have enough information, reply with
-
-                Final Answer: <your summary>
-                
-            Explain in detail with the code examples
-        """
-
-        llm = self._get_llm(cfg)
         agent_graph = create_agent_graph(tools, llm, system_prompt)
 
         # Create a wrapper that mimics the AgentExecutor.run method
@@ -602,13 +599,19 @@ class AgentFactory:
             def run(self, input_str: str):
                 state = {
                     "input": input_str,
-                    "repo_info": {"url": cfg.repo_url, "branch": cfg.branch, "digest": index.digest},
+                    "repo_info": {
+                        "url": cfg.repo_url,
+                        "branch": cfg.branch,
+                        "digest": index.digest,
+                    },
                     "messages": [],
                     "intermediate_steps": [],
                     "iterations": 0,
                 }
                 while True:
-                    state = self.graph.invoke(state, {"recursion_limit": MAX_ITERATIONS * 2})           # one step
+                    state = self.graph.invoke(
+                        state, {"recursion_limit": MAX_ITERATIONS * 2}
+                    )  # one step
                     last = state["messages"][-1]["content"] if state["messages"] else ""
                     if "Final Answer:" in last or state["iterations"] >= MAX_ITERATIONS:
                         break
@@ -617,8 +620,6 @@ class AgentFactory:
                 return match.group(1).strip() if match else last
 
         return AgentGraphRunner(agent_graph)
-
-
 
 
 def clone_and_index(
@@ -759,8 +760,6 @@ def agent_query(
     repo_url: str,
     branch: str = "main",
     embedding: EmbeddingMethod = EmbeddingMethod.SBERT,
-    query: str = "",
-    k: int = 8,
     base_dir: str = str(Path.cwd()),
     llm_provider: LLMProvider = LLMProvider.ANTHROPIC,
     llm_model: str = "claude-3-haiku-20240307",
@@ -781,7 +780,10 @@ def agent_query(
         model_name=llm_model,
         embedding_function=embedding.value,
         temperature=llm_temperature,
+        max_tokens=llm_max_tokens,
     )
-    agent = AgentFactory().create_agent(cfg,base_dir=base_dir)
+    agent = AgentFactory().create_agent(
+        cfg, base_dir=base_dir, system_prompt=llm_system_prompt
+    )
     result = agent.run(prompt)
     return result
