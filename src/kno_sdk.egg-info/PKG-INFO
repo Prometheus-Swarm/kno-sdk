@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: kno-sdk
-Version: 0.1.2
+Version: 1.0.0
 Summary: Clone GitHub repos, build embeddings, store in Chroma, and search.
 Author-email: Your Name <you@example.com>
 License: MIT
@@ -8,32 +8,219 @@ Description-Content-Type: text/markdown
 Requires-Dist: GitPython==3.1.44
 Requires-Dist: langchain==0.3.24
 Requires-Dist: sentence-transformers==4.1.0
-Requires-Dist: chromadb==1.0.6
+Requires-Dist: langchain-chroma==0.2.3
 Requires-Dist: tree-sitter==0.20.2
 Requires-Dist: tree-sitter-languages==1.10.2
 Requires-Dist: transformers==4.51.3
 Requires-Dist: langchain-openai==0.3.14
 
-```python
-from repo_indexer import clone_and_index, search
+# kno-sdk
 
-# index a repo
-idx = clone_and_index("https://github.com/xyz/project.git")
-
-# later, search
-results = search("https://github.com/xyz/project.git", query="How to authenticate?")
-for r in results:
-    print(r)
+A Python library for cloning, indexing, and semantically searching Git repositories using embeddings and Chroma.
 
 ---
 
-## 4. Publishing to PyPI
+## 🚀 Features
 
-1. **Build** your distribution:
+- **Clone or update** any Git repository with a single call  
+- **Extract semantic code chunks** via Tree-Sitter grammars (functions, classes, methods, etc.)  
+- **Fallback to line-based chunking** for unsupported languages or large files  
+- **Embed code or text** with your choice of:
+  - OpenAI’s `text-embedding-ada-002` via **OpenAIEmbeddings**  
+  - Local SBERT model (e.g. `microsoft/graphcodebert-base`) via **SBERTEmbeddings**  
+- **Persist vector store** in a `.kno/` folder using Chroma  
+- **Auto-commit & push** the embedding database back to your repo  
+- **Fast similarity search** over indexed code chunks  
 
-   ```bash
-   pip install build twine
-   python -m build
+---
 
-2. **Upload** twine upload dist/*
-3. **Install** pip install repo-indexer
+## 📦 Installation
+
+```bash
+pip install kno-sdk
+```
+🔧 Dependencies
+---------------
+
+*   [GitPython](https://pypi.org/project/GitPython/)
+    
+*   [langchain-openai](https://pypi.org/project/langchain-openai/)
+    
+*   [sentence-transformers](https://pypi.org/project/sentence-transformers/)
+    
+*   [langchain-chroma](https://pypi.org/project/langchain-chroma/)
+    
+*   [tree-sitter-languages](https://pypi.org/project/tree-sitter-languages/)
+    
+*   [tree-sitter](https://pypi.org/project/tree-sitter/)
+    
+
+🏁 Quickstart
+-------------
+
+```python
+from kno_sdk import clone_and_index, search, EmbeddingMethod
+
+# 1. Clone (or pull) and index a repository
+repo_index = clone_and_index(
+    repo_url="https://github.com/SyedGhazanferAnwar/NestJs-MovieApp",
+    branch="master",
+    embedding=EmbeddingMethod.SBERT,      # or EmbeddingMethod.OPENAI
+    base_dir="repos"                      # where to clone locally
+)
+print("Indexed at:", repo_index.path)
+print("Directory snapshot:\n", repo_index.digest)
+
+# 2. Perform semantic search
+results = search(
+    repo_url="https://github.com/SyedGhazanferAnwar/NestJs-MovieApp",
+    branch="master",
+    embedding=EmbeddingMethod.SBERT,
+    base_dir="repos",
+    query="NestFactory",
+    k=5
+)
+for i, chunk in enumerate(results, 1):
+    print(f"--- Result #{i} ---\n{chunk}\n")
+```
+
+
+📖 API Reference
+----------------
+
+### clone\_and\_index(...) → RepoIndex
+
+Clone (or pull) a repository, embed its files, and persist a Chroma database in .//.kno/. Finally, commit & push the .kno/ folder back to the original repo.
+
+```python
+def clone_and_index(
+    repo_url: str,
+    branch: str = "main",
+    embedding: EmbeddingMethod = EmbeddingMethod.SBERT,
+    base_dir: str = "."
+) -> RepoIndex
+```
+
+*   **repo\_url** — Git HTTPS/SSH URL
+    
+*   **branch** — branch to clone or update (default: main)
+    
+*   **embedding** — EmbeddingMethod.OPENAI or EmbeddingMethod.SBERT
+    
+*   **base\_dir** — local directory to clone into (default: current working dir)
+    
+
+Returns a `RepoIndex` object with:
+
+*   path: pathlib.Path — local clone directory
+    
+*   digest: str — textual snapshot of the directory tree
+    
+*   vector\_store: Chroma — the Chroma collection instance
+    
+
+### search(...) → List[str]
+
+Run a similarity search on an existing `.kno/` Chroma database.
+
+```python
+def search(
+    repo_url: str,
+    branch: str = "main",
+    embedding: EmbeddingMethod = EmbeddingMethod.SBERT,
+    query: str = "",
+    k: int = 8,
+    base_dir: str = "."
+) -> List[str]
+```
+
+*   **query** — your natural-language or code search prompt
+    
+*   **k** — number of top results to return
+    
+
+Returns a list of the top-k matching code/text chunks.
+
+### EmbeddingMethod
+
+```python
+
+class EmbeddingMethod(str, Enum):
+    OPENAI = "OpenAIEmbeddings"
+    SBERT  = "SBERTEmbeddings"
+```
+
+Choose between OpenAI’s hosted embeddings or a local SBERT model.
+
+### RepoIndex
+
+```python
+class EmbeddingMethod(str, Enum):
+    OPENAI = "OpenAIEmbeddings"
+    SBERT  = "SBERTEmbeddings"
+```
+
+*   **path** — where the repository was cloned
+    
+*   **vector\_store** — live Chroma client for further queries
+    
+*   **digest** — human-readable directory listing (useful for context)
+    
+
+🔍 How It Works
+---------------
+
+1.  **Clone or Pull**Uses GitPython to clone depth-1 or pull the latest changes.
+    
+2.  **Directory Snapshot**Builds a small “digest” of files/folders (up to ~1 K tokens).
+    
+3.  **Chunk Extraction**
+    
+    *   **Tree-sitter** for language-aware extraction of functions, classes, etc.
+        
+    *   **Fallback** to fixed-size line chunks for unknown languages or large files.
+        
+4.  **Embedding**
+    
+    *   Streams each chunk into your chosen embedding backend.
+        
+    *   Respects a 16 000-token cap per chunk.
+        
+5.  **Vector Store**
+    
+    *   Persists embeddings in a namespaced Chroma collection under .kno/.
+        
+    *   Only indexes files once (skips already-populated collections).
+        
+6.  **Commit & Push**
+    
+    *   Automatically stages, commits, and pushes .kno/ back to your remote.
+        
+
+⚙️ Configuration
+----------------
+
+*   **Skip directories**: .git, node\_modules, build, dist, target, .vscode, .kno
+    
+*   **Skip files**: package-lock.json, yarn.lock, .prettierignore
+    
+*   **Binary extensions**: common image, audio, video, archive, font, and binary file types
+    
+
+All of the above can be modified by forking the source and adjusting the `skip_dirs`, `skip_files`, and `BINARY_EXTS` sets.
+
+🤝 Contributing
+---------------
+
+1.  Fork this repo
+    
+2.  Create your feature branch (git checkout -b feature/AmazingFeature)
+    
+3.  Commit your changes (git commit -m 'Add amazing feature')
+    
+4.  Push to the branch (git push origin feature/AmazingFeature)
+    
+5.  Open a Pull Request
+    
+
+Please run pytest before submitting and follow the existing code style.
