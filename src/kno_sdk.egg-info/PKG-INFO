@@ -1,0 +1,39 @@
+Metadata-Version: 2.4
+Name: kno-sdk
+Version: 0.1.1
+Summary: Clone GitHub repos, build embeddings, store in Chroma, and search.
+Author-email: Your Name <you@example.com>
+License: MIT
+Description-Content-Type: text/markdown
+Requires-Dist: GitPython==3.1.44
+Requires-Dist: langchain==0.3.24
+Requires-Dist: sentence-transformers==4.1.0
+Requires-Dist: chromadb==1.0.6
+Requires-Dist: tree-sitter==0.20.2
+Requires-Dist: tree-sitter-languages==1.10.2
+Requires-Dist: transformers==4.51.3
+Requires-Dist: langchain-openai==0.3.14
+
+```python
+from repo_indexer import clone_and_index, search
+
+# index a repo
+idx = clone_and_index("https://github.com/xyz/project.git")
+
+# later, search
+results = search("https://github.com/xyz/project.git", query="How to authenticate?")
+for r in results:
+    print(r)
+
+---
+
+## 4. Publishing to PyPI
+
+1. **Build** your distribution:
+
+   ```bash
+   pip install build twine
+   python -m build
+
+2. **Upload** twine upload dist/*
+3. **Install** pip install repo-indexer
