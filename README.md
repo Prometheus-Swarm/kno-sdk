@@ -1,6 +1,6 @@
 # kno-sdk
 
-A Python library for cloning, indexing, and semantically searching Git repositories using embeddings and Chroma.
+A Python library for cloning, indexing, and semantically searching Git repositories using embeddings (OpenAI or SBERT) and Chroma — plus a high-level `agent_query` for autonomous code agent.
 
 ---
 
@@ -15,6 +15,7 @@ A Python library for cloning, indexing, and semantically searching Git repositor
 - **Persist vector store** in a `.kno/` folder using Chroma  
 - **Auto-commit & push** the embedding database back to your repo  
 - **Fast similarity search** over indexed code chunks  
+- **Autonomous agent** for code analysis via `agent_query()`
 
 ---
 
@@ -23,21 +24,6 @@ A Python library for cloning, indexing, and semantically searching Git repositor
 ```bash
 pip install kno-sdk
 ```
-🔧 Dependencies
----------------
-
-*   [GitPython](https://pypi.org/project/GitPython/)
-    
-*   [langchain-openai](https://pypi.org/project/langchain-openai/)
-    
-*   [sentence-transformers](https://pypi.org/project/sentence-transformers/)
-    
-*   [langchain-chroma](https://pypi.org/project/langchain-chroma/)
-    
-*   [tree-sitter-languages](https://pypi.org/project/tree-sitter-languages/)
-    
-*   [tree-sitter](https://pypi.org/project/tree-sitter/)
-    
 
 🏁 Quickstart
 -------------
@@ -66,7 +52,27 @@ results = search(
 )
 for i, chunk in enumerate(results, 1):
     print(f"--- Result #{i} ---\n{chunk}\n")
+
+# 3. Autonomous Code-Analysis Agent
+from kno_sdk import agent_query, EmbeddingMethod, LLMProvider
+
+result = agent_query(
+    repo_url="https://github.com/WebGoat/WebGoat",
+    branch="main",
+    embedding=EmbeddingMethod.SBERT,
+    base_dir="repos",
+    llm_provider=LLMProvider.ANTHROPIC,
+    llm_model="claude-3-haiku-20240307",
+    llm_temperature=0.0,
+    llm_max_tokens=4096,
+    llm_system_prompt="You are a senior code-analysis agent.",
+    prompt="Find issues, bugs and vulnerabilities in this repo, and explain each with exact code locations.",
+    MODEL_API_KEY="your_api_key_here"
+)
+
+print(result)
 ```
+
 
 
 📖 API Reference
@@ -74,7 +80,7 @@ for i, chunk in enumerate(results, 1):
 
 ### clone\_and\_index(...) → RepoIndex
 
-Clone (or pull) a repository, embed its files, and persist a Chroma database in .//.kno/. Finally, commit & push the .kno/ folder back to the original repo.
+Clone (or pull) a repository, embed its files, and persist a Chroma database in .kno folder. Finally, commit & push the .kno/ folder back to the original repo.
 
 ```python
 def clone_and_index(
@@ -124,6 +130,42 @@ def search(
     
 
 Returns a list of the top-k matching code/text chunks.
+
+### agent_query(...) → str
+
+High-level agent that clones, indexes, and then iteratively uses tools (search_code, read_file, etc.) plus an LLM to fulfill your prompt.
+
+```python
+def agent_query(
+    repo_url: str,
+    branch: str = "main",
+    embedding: EmbeddingMethod = EmbeddingMethod.SBERT,
+    base_dir: str = str(Path.cwd()),
+    llm_provider: LLMProvider = LLMProvider.ANTHROPIC,
+    llm_model: str = "claude-3-haiku-20240307",
+    llm_temperature: float = 0.0,
+    llm_max_tokens: int = 4096,
+    llm_system_prompt: str = "",
+    prompt: str = "",
+    MODEL_API_KEY: str = "",
+) -> str
+```
+*   **repo\_url**, **branch**, **embedding**, **base\_dir** — same as above
+    
+*   **llm\_provider** — LLMProvider.OPENAI or LLMProvider.ANTHROPIC
+    
+*   **llm\_model** — model name (e.g. "gpt-4" or "claude-3-haiku-20240307")
+    
+*   **llm\_temperature**, **llm\_max\_tokens** — sampling params
+    
+*   **llm\_system\_prompt** — initial system message for the agent
+    
+*   **prompt** — your user query/task description
+    
+*   **MODEL\_API\_KEY** — sets OPENAI\_API\_KEY or ANTHROPIC\_API\_KEY
+    
+
+Returns the agent’s **Final Answer** as a string.
 
 ### EmbeddingMethod
 
@@ -180,7 +222,16 @@ class EmbeddingMethod(str, Enum):
     
     *   Automatically stages, commits, and pushes .kno/ back to your remote.
         
-
+7.   **Autonomous Agent**
+    
+*   RAG prompt
+    
+*   Tool calls (search\_code, read\_file, …)
+    
+*   Iterative LLM planning & execution
+    
+*   Stops on “Final Answer:” or max iterations
+  
 ⚙️ Configuration
 ----------------
 
@@ -192,6 +243,22 @@ class EmbeddingMethod(str, Enum):
     
 
 All of the above can be modified by forking the source and adjusting the `skip_dirs`, `skip_files`, and `BINARY_EXTS` sets.
+
+🔧 Dependencies
+---------------
+
+*   [GitPython](https://pypi.org/project/GitPython/)
+    
+*   [langchain-openai](https://pypi.org/project/langchain-openai/)
+    
+*   [sentence-transformers](https://pypi.org/project/sentence-transformers/)
+    
+*   [langchain-chroma](https://pypi.org/project/langchain-chroma/)
+    
+*   [tree-sitter-languages](https://pypi.org/project/tree-sitter-languages/)
+    
+*   [tree-sitter](https://pypi.org/project/tree-sitter/)
+    
 
 🤝 Contributing
 ---------------
