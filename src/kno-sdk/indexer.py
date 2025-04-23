@@ -7,7 +7,7 @@ from langchain_openai import OpenAIEmbeddings, ChatOpenAI
 from langchain.embeddings.base import Embeddings
 from sentence_transformers import SentenceTransformer
 from chromadb import Client as Chroma
-from typing import Dict, List, Optional, Tuple, TypedDict, Any, Callable, Annotated
+from typing import Dict, List, Tuple
 from tree_sitter_languages import get_language
 from tree_sitter import Parser
 
