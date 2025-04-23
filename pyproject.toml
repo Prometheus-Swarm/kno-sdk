@@ -18,7 +18,8 @@ dependencies = [
     "tree-sitter-languages==1.10.2",
     "transformers==4.51.3",
     "langchain-openai==0.3.14",
-    "langchain-anthropic==0.3.12"
+    "langchain-anthropic==0.3.12",
+    "langgraph==0.3.33"
 ]
 
 [tool.setuptools.packages.find]

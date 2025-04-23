@@ -13,6 +13,8 @@ Requires-Dist: tree-sitter==0.20.2
 Requires-Dist: tree-sitter-languages==1.10.2
 Requires-Dist: transformers==4.51.3
 Requires-Dist: langchain-openai==0.3.14
+Requires-Dist: langchain-anthropic==0.3.12
+Requires-Dist: langgraph==0.3.33
 
 # kno-sdk
 
