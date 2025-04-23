@@ -266,23 +266,36 @@ def search(
     2. Load the existing `.kno/` Chroma DB
     3. Return the top‐k page_content for `query`
     """
-    print("BRANCG",branch)
     repo_name = repo_url.rstrip("/").split("/")[-1].removesuffix(".git")
     repo_path = os.path.join(base_dir, repo_name)
-    kno_dir = os.path.join(repo_path, ".kno")
 
     if not pathlib.Path(repo_path).exists():
         Repo.clone_from(repo_url, repo_path, depth=1, branch=branch)
     else:
         Repo(repo_path).remotes.origin.pull(branch)
 
-    repo = Repo(repo_path)
-    commit    = repo.head.commit.hexsha[:7]
-    time_ms = int(time.time() * 1000)
-    subdir = f"embedding_{embedding.value}_{time_ms}_{commit}"
-    
+    # 2) locate .kno and filter for this embedding method
+    kno_root = Path(repo_path) / ".kno"
+    if not kno_root.exists():
+        raise FileNotFoundError(f"No .kno directory in {repo_path}. Run clone_and_index first.")
+
+    prefix = f"embedding_{embedding.value}_"
+    cand_dirs = [d for d in kno_root.iterdir() if d.is_dir() and d.name.startswith(prefix)]
+    if not cand_dirs:
+        raise ValueError(f"No embedding folders for `{embedding.value}` found in {kno_root}")
+
+    # 3) parse out the timestamp and pick the max
+    def _ts(d: Path) -> int:
+        parts = d.name.split("_")
+        try:
+            return int(parts[2])
+        except (IndexError, ValueError):
+            return 0
+
+    latest_dir = max(cand_dirs, key=_ts)
+    print("TATA", latest_dir)
     embed_fn = OpenAIEmbeddings() if embedding.value=="OpenAIEmbeddings" else SBERTEmbeddings()
-    vs = Chroma(collection_name=repo_name,embedding_function=embed_fn,persist_directory=os.path.join(kno_dir,subdir))
+    vs = Chroma(collection_name=repo_name,embedding_function=embed_fn,persist_directory="repos/NestJs-MovieApp/.kno/embedding_SBERTEmbeddings_1745390419075_74bbc9f")
 
     return [d.page_content for d in vs.similarity_search(query, k=k)]
 
