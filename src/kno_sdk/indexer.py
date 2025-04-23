@@ -97,6 +97,11 @@ class RepoIndex:
     vector_store: Chroma
     digest: str
 
+    def __init__(self, vector_store: Chroma, digest: str, path: pathlib.Path = pathlib.Path.cwd()):
+        self.path         = path
+        self.vector_store = vector_store
+        self.digest       = digest
+
     def _build_directory_digest(
         repo_path: pathlib.Path, skip_dirs: set[str], skip_files: set[str]
     ) -> str:
@@ -208,15 +213,15 @@ def clone_and_index(
 
     # 2. choose embedding
     embed_fn = OpenAIEmbeddings() if embedding=="openai" else SBERTEmbeddings()
-    print(kno_dir, "KNOOO")
     vs = Chroma(collection_name=repo_name,embedding_function=embed_fn,persist_directory=kno_dir)
+    skip_dirs = {".git","node_modules","build","dist","target",".vscode",".kno"}
+    skip_files= {"package-lock.json","yarn.lock",".prettierignore"}
+    digest = _build_directory_digest(repo_path, skip_dirs, skip_files)
     # 3. index if empty
     if vs._collection.count() == 0:
         logger.info("Indexing %s …", repo_name)
         texts, metas = [], []
-        skip_dirs = {".git","node_modules","build","dist","target",".vscode",".kno"}
-        skip_files= {"package-lock.json","yarn.lock",".prettierignore"}
-        digest = _build_directory_digest(repo_path, skip_dirs, skip_files)
+        
 
         for fp in pathlib.Path(repo_path).rglob("*.*"):
             if any(p in skip_dirs for p in fp.parts) or fp.name in skip_files:
@@ -232,12 +237,14 @@ def clone_and_index(
         logger.info("Embedded %d chunks", len(texts))
 
     # 4. commit & push .kno
-    git = Repo(repo_path)
-    git.git.add(str(kno_dir))
-    git.index.commit("Add/update .kno embedding database")
-    git.remote().push(branch)
+    repo = Repo(repo_path)
+    # get path relative to repo root:
+    relative_kno = os.path.relpath(str(kno_dir), str(repo_path))
+    repo.git.add(str(relative_kno))
+    repo.index.commit("Add/update .kno embedding database")
+    repo.remote().push(branch)
 
-    return RepoIndex(vs, digest)
+    return RepoIndex(vector_store=vs, digest=digest)
 
 def search(
     repo_url: str,
