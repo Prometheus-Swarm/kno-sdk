@@ -2,8 +2,8 @@ import logging
 import pathlib
 import os
 import time
-
 import json
+import re
 
 
 from pathlib import Path
@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from langchain_anthropic import ChatAnthropic
 from langchain.chat_models.base import BaseChatModel
 from langchain_core.tools import Tool
+from langgraph.graph import StateGraph, END
 
 
 Language = get_language
@@ -138,8 +139,8 @@ PARSER_CACHE: Dict[str, Parser] = {
 }
 
 class EmbeddingMethod(str, Enum):
-    OPENAI = "OpenAIEmbeddings"
-    SBERT = "SBERTEmbeddings"
+    OPENAI = "OpenAIEmbedding"
+    SBERT = "SBERTEmbedding"
 
 
 class LLMProvider(str, Enum):
@@ -155,7 +156,7 @@ class AgentConfig:
     llm_provider: str = "anthropic"
     model_name: str = "claude-3-haiku-20240307"
     temperature: float = 0.0
-    embedding_function: str = "SBERTEmbeddings"
+    embedding_function: str = "SBERTEmbedding"
 
 
 # ─────────────────────────── LLM PROVIDERS ────────────────────────────
@@ -566,8 +567,8 @@ class AgentFactory:
             return AnthropicProvider(model=cfg.model_name, temperature=cfg.temperature, max_tokens_to_sample=4096)
         raise ValueError(f"Unknown provider: {cfg.llm_provider}")
 
-    def create_agent(self, cfg: AgentConfig):
-        index = self.index_service.clone_and_index(cfg.repo_url, cfg.branch, cfg.embedding_function)
+    def create_agent(self, cfg: AgentConfig, base_dir: str = str(Path.cwd())):
+        index = clone_and_index(cfg.repo_url, cfg.branch, cfg.embedding_function, base_dir)
         llm = self._get_llm(cfg)
         tools = build_tools(index, llm)
         system_prompt = f"""
@@ -653,7 +654,7 @@ def clone_and_index(
     # 2. choose embedding
     embed_fn = (
         OpenAIEmbeddings()
-        if embedding.value == "OpenAIEmbeddings"
+        if embedding.value == "OpenAIEmbedding"
         else SBERTEmbeddings()
     )
     vs = Chroma(
@@ -742,7 +743,7 @@ def search(
     latest_dir = max(cand_dirs, key=_ts)
     embed_fn = (
         OpenAIEmbeddings()
-        if embedding.value == "OpenAIEmbeddings"
+        if embedding.value == "OpenAIEmbedding"
         else SBERTEmbeddings()
     )
     vs = Chroma(
@@ -764,10 +765,15 @@ def agent_query(
     llm_provider: LLMProvider = LLMProvider.ANTHROPIC,
     llm_model: str = "claude-3-haiku-20240307",
     llm_temperature: float = 0.0,
-    llm_max_tokens: int = 1000,
+    llm_max_tokens: int = 4096,
     llm_system_prompt: str = "",
-    task_description: str = "",
+    prompt: str = "",
+    MODEL_API_KEY: str = "",
 ):
+    if LLMProvider.ANTHROPIC:
+        os.environ["ANTHROPIC_API_KEY"] = MODEL_API_KEY
+    elif LLMProvider.OPENAI:
+        os.environ["OPENAI_API_KEY"] = MODEL_API_KEY
     cfg = AgentConfig(
         repo_url=repo_url,
         branch=branch,
@@ -776,5 +782,6 @@ def agent_query(
         embedding_function=embedding.value,
         temperature=llm_temperature,
     )
-    agent = AgentFactory(IndexService("./agent_repos")).create_agent(cfg)
-    result = agent.run(args.task)
+    agent = AgentFactory().create_agent(cfg,base_dir=base_dir)
+    result = agent.run(prompt)
+    return result
