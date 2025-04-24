@@ -42,6 +42,7 @@ class AgentConfig:
     temperature: float = 0.0
     embedding_function: str = "SBERTEmbedding"
     max_tokens: int = 4096
+    cloned_repo_base_dir: str = str(Path.cwd())
 
 
 # ─────────────────────────── LLM PROVIDERS ────────────────────────────
@@ -74,7 +75,7 @@ def build_tools(index: RepoIndex, llm: LLMProviderBase, cfg: AgentConfig) -> Lis
                 f"Please provide a search query. Repository structure:\n{index.digest}"
             )
         # 1) retrieve top‑k code snippets
-        snippets = search(repo_url=cfg.repo_url, branch=cfg.branch, embedding=EmbeddingMethod.SBERT, base_dir=cfg.base_dir,query=query, k=k)
+        snippets = search(repo_url=cfg.repo_url, branch=cfg.branch, embedding=EmbeddingMethod.SBERT, cloned_repo_base_dir=cfg.cloned_repo_base_dir,query=query, k=k)
         context = "\n\n---\n\n".join(snippets)
 
         # 2) build a RAG prompt
@@ -369,10 +370,10 @@ class AgentFactory:
         raise ValueError(f"Unknown provider: {cfg.llm_provider}")
 
     def create_agent(
-        self, cfg: AgentConfig, base_dir: str = str(Path.cwd()), system_prompt: str = ""
+        self, cfg: AgentConfig, cloned_repo_base_dir: str = str(Path.cwd()), system_prompt: str = ""
     ):
         index = clone_and_index(
-            cfg.repo_url, cfg.branch, cfg.embedding_function, base_dir, False
+            cfg.repo_url, cfg.branch, cfg.embedding_function, cloned_repo_base_dir, False
         )
         llm = self._get_llm(cfg)
         tools = build_tools(index, llm, cfg)
@@ -413,7 +414,7 @@ def agent_query(
     repo_url: str,
     branch: str = "main",
     embedding: EmbeddingMethod = EmbeddingMethod.SBERT,
-    base_dir: str = str(Path.cwd()),
+    cloned_repo_base_dir: str = str(Path.cwd()),
     llm_provider: LLMProvider = LLMProvider.ANTHROPIC,
     llm_model: str = "claude-3-haiku-20240307",
     llm_temperature: float = 0.0,
@@ -434,9 +435,10 @@ def agent_query(
         embedding_function=embedding.value,
         temperature=llm_temperature,
         max_tokens=llm_max_tokens,
+        cloned_repo_base_dir=cloned_repo_base_dir
     )
     agent = AgentFactory().create_agent(
-        cfg, base_dir=base_dir, system_prompt=llm_system_prompt
+        cfg, cloned_repo_base_dir=cloned_repo_base_dir, system_prompt=llm_system_prompt
     )
     result = agent.run(prompt)
     return result

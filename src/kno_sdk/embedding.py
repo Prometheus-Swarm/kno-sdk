@@ -247,7 +247,7 @@ def clone_and_index(
     repo_url: str,
     branch: str = "main",
     embedding: EmbeddingMethod = EmbeddingMethod.SBERT,
-    base_dir: str = str(Path.cwd()),
+    cloned_repo_base_dir: str = str(Path.cwd()),
     should_reindex: bool = True,
 ) -> RepoIndex:
     """
@@ -259,7 +259,7 @@ def clone_and_index(
         embedding = EmbeddingMethod(embedding)  # raises ValueError if invalid
 
     repo_name = repo_url.rstrip("/").split("/")[-1].removesuffix(".git")
-    repo_path = os.path.join(base_dir, repo_name)
+    repo_path = os.path.join(cloned_repo_base_dir, repo_name)
     kno_dir = os.path.join(repo_path, ".kno")
     skip_dirs = {".git", "node_modules", "build", "dist", "target", ".vscode", ".kno"}
     skip_files = {"package-lock.json", "yarn.lock", ".prettierignore"}
@@ -353,7 +353,7 @@ def search(
     embedding: EmbeddingMethod = EmbeddingMethod.SBERT,
     query: str = "",
     k: int = 8,
-    base_dir: str = str(Path.cwd()),
+    cloned_repo_base_dir: str = str(Path.cwd()),
 ) -> List[str]:
     """
     1. Clone/pull `repo_url`
@@ -361,7 +361,7 @@ def search(
     3. Return the top‐k page_content for `query`
     """
     repo_name = repo_url.rstrip("/").split("/")[-1].removesuffix(".git")
-    repo_path = os.path.join(base_dir, repo_name)
+    repo_path = os.path.join(cloned_repo_base_dir, repo_name)
 
     if not Path(repo_path).exists():
         Repo.clone_from(repo_url, repo_path, depth=1, branch=branch)
