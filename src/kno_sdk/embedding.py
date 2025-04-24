@@ -300,7 +300,7 @@ def clone_and_index(
             embedding_function=embed_fn,
             persist_directory=str(latest_dir),
         )
-        return RepoIndex(vector_store=vs, digest=digest)
+        return RepoIndex(vector_store=vs, digest=digest, path=Path(repo_path))
 
     repo = Repo(repo_path)
     commit = repo.head.commit.hexsha[:7]
@@ -345,7 +345,7 @@ def clone_and_index(
     repo.index.commit("Add/update .kno embedding database")
     repo.remote().push(branch)
 
-    return RepoIndex(vector_store=vs, digest=digest)
+    return RepoIndex(vector_store=vs, digest=digest, path=Path(repo_path))
 
 def search(
     repo_url: str,

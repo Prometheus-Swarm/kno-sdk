@@ -114,8 +114,8 @@ def build_tools(index: RepoIndex, llm: LLMProviderBase, cfg: AgentConfig) -> Lis
             return f"Error reading file {file_path}: {str(e)}"
 
     return [
-        Tool(name="search_code", func=search_code, description="Semantic code search"),
-        Tool(name="read_file", func=read_file, description="Read file content"),
+        Tool(name="search_code", func=search_code, description="Semantic code search in the repo"),
+        Tool(name="read_file", func=read_file, description="Read a particular file content in the repo"),
     ]
 
 
@@ -135,30 +135,11 @@ def create_agent_graph(tools: List[Tool], llm: LLMProviderBase, system_message: 
 
     # Function to formulate prompt with history and tool results
     def get_prompt_with_history(state: AgentState) -> List[Dict[str, Any]]:
-        messages = []
-
-        # Add system message
-        messages.append({"role": "system", "content": system_message})
-
-        # Initial human input
-        messages.append({"role": "user", "content": state["input"]})
-
-        # Add all intermediate steps as messages
-        for i, (action, observation) in enumerate(state["intermediate_steps"]):
-            # Action message - what tool was used and with what input
-            if isinstance(action, dict):
-                tool_name = action.get("name", "unknown")
-                tool_input = action.get("arguments", {})
-                action_str = f"I'll use the {tool_name} tool with input: {json.dumps(tool_input, indent=2)}"
-            else:
-                action_str = f"I'll use the {action} tool"
-
-            messages.append({"role": "assistant", "content": action_str})
-
-            # Observation message - what was the result of the tool
-            messages.append({"role": "user", "content": f"Observation: {observation}"})
-            messages.extend(state["messages"])
-        return messages
+        return (
+            [{"role": "system", "content": system_message}]
+            + state["messages"]
+            + [{"role": "user", "content": state["input"]}]
+        )
 
     # Node 1: Agent thinks about what to do next
     def agent_thinking(state: AgentState) -> AgentState:
@@ -243,7 +224,7 @@ def create_agent_graph(tools: List[Tool], llm: LLMProviderBase, system_message: 
                 "messages": state["messages"]
                 + [
                     {
-                        "role": "system",
+                        "role": "assistant",
                         "content": (
                             "I couldn’t recognise a tool call. "
                             "Reply either with valid\n"
@@ -274,7 +255,7 @@ def create_agent_graph(tools: List[Tool], llm: LLMProviderBase, system_message: 
                 return {
                     **state,
                     "messages": state["messages"]
-                    + [{"role": "system", "content": warn_msg}],
+                    + [{"role": "assistant", "content": warn_msg}],
                 }
 
         # ---------- 5. execute the tool -----------------
