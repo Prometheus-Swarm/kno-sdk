@@ -585,7 +585,7 @@ class AgentFactory:
         self, cfg: AgentConfig, base_dir: str = str(Path.cwd()), system_prompt: str = ""
     ):
         index = clone_and_index(
-            cfg.repo_url, cfg.branch, cfg.embedding_function, base_dir
+            cfg.repo_url, cfg.branch, cfg.embedding_function, base_dir, False
         )
         llm = self._get_llm(cfg)
         tools = build_tools(index, llm)
@@ -620,13 +620,21 @@ class AgentFactory:
                 return match.group(1).strip() if match else last
 
         return AgentGraphRunner(agent_graph)
-
+    
+# 3) parse out the timestamp and pick the max
+def _ts(d: Path) -> int:
+    parts = d.name.split("_")
+    try:
+        return int(parts[2])
+    except (IndexError, ValueError):
+        return 0
 
 def clone_and_index(
     repo_url: str,
     branch: str = "main",
     embedding: EmbeddingMethod = EmbeddingMethod.SBERT,
     base_dir: str = str(Path.cwd()),
+    should_reindex: bool = True,
 ) -> RepoIndex:
     """
     1. Clone or pull `repo_url`
@@ -647,11 +655,40 @@ def clone_and_index(
     else:
         logger.info("Pulling latest on %s", repo_name)
         Repo(repo_path).remotes.origin.pull(branch)
+    if not should_reindex:
+        # 2) locate .kno and filter for this embedding method
+        kno_root = Path(repo_path) / ".kno"
+        if not kno_root.exists():
+            raise FileNotFoundError(
+                f"No .kno directory in {repo_path}. Run clone_and_index first."
+            )
+
+        prefix = f"embedding_{embedding.value}_"
+        cand_dirs = [
+            d for d in kno_root.iterdir() if d.is_dir() and d.name.startswith(prefix)
+        ]
+        if not cand_dirs:
+            raise ValueError(
+                f"No embedding folders for `{embedding.value}` found in {kno_root}"
+            )
+
+        latest_dir = max(cand_dirs, key=_ts)
+        embed_fn = (
+            OpenAIEmbeddings()
+            if embedding.value == "OpenAIEmbedding"
+            else SBERTEmbeddings()
+        )
+        vs = Chroma(
+            collection_name=repo_name,
+            embedding_function=embed_fn,
+            persist_directory=str(latest_dir),
+        )
+        return RepoIndex(vector_store=vs, digest=digest)
+
     repo = Repo(repo_path)
     commit = repo.head.commit.hexsha[:7]
     time_ms = int(time.time() * 1000)
     subdir = f"embedding_{embedding.value}_{time_ms}_{commit}"
-
     # 2. choose embedding
     embed_fn = (
         OpenAIEmbeddings()
@@ -732,14 +769,6 @@ def search(
         raise ValueError(
             f"No embedding folders for `{embedding.value}` found in {kno_root}"
         )
-
-    # 3) parse out the timestamp and pick the max
-    def _ts(d: Path) -> int:
-        parts = d.name.split("_")
-        try:
-            return int(parts[2])
-        except (IndexError, ValueError):
-            return 0
 
     latest_dir = max(cand_dirs, key=_ts)
     embed_fn = (
