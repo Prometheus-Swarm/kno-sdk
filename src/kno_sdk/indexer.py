@@ -647,6 +647,9 @@ def clone_and_index(
     repo_name = repo_url.rstrip("/").split("/")[-1].removesuffix(".git")
     repo_path = os.path.join(base_dir, repo_name)
     kno_dir = os.path.join(repo_path, ".kno")
+    skip_dirs = {".git", "node_modules", "build", "dist", "target", ".vscode", ".kno"}
+    skip_files = {"package-lock.json", "yarn.lock", ".prettierignore"}
+    digest = _build_directory_digest(repo_path, skip_dirs, skip_files)
 
     # 1. clone or pull
     if not pathlib.Path(repo_path).exists():
@@ -700,9 +703,7 @@ def clone_and_index(
         embedding_function=embed_fn,
         persist_directory=os.path.join(kno_dir, subdir),
     )
-    skip_dirs = {".git", "node_modules", "build", "dist", "target", ".vscode", ".kno"}
-    skip_files = {"package-lock.json", "yarn.lock", ".prettierignore"}
-    digest = _build_directory_digest(repo_path, skip_dirs, skip_files)
+
     # 3. index if empty
     if vs._collection.count() == 0:
         logger.info("Indexing %s …", repo_name)
