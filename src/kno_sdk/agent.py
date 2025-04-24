@@ -64,7 +64,7 @@ class AnthropicProvider(ChatAnthropic, LLMProviderBase):
 # ───────────────────────────── TOOLS ────────────────────────────────
 
 
-def build_tools(index: RepoIndex, llm: LLMProviderBase) -> List[Tool]:
+def build_tools(index: RepoIndex, llm: LLMProviderBase, cfg: AgentConfig) -> List[Tool]:
     """Return lightweight LangChain `Tool`s that close over *index*."""
 
     def search_code(query: str, k: int = 8) -> str:
@@ -74,7 +74,7 @@ def build_tools(index: RepoIndex, llm: LLMProviderBase) -> List[Tool]:
                 f"Please provide a search query. Repository structure:\n{index.digest}"
             )
         # 1) retrieve top‑k code snippets
-        snippets = search(query, k=k)
+        snippets = search(repo_url=cfg.repo_url, branch=cfg.branch, embedding=EmbeddingMethod.SBERT, base_dir=cfg.base_dir,query=query, k=k)
         context = "\n\n---\n\n".join(snippets)
 
         # 2) build a RAG prompt
@@ -164,20 +164,25 @@ def create_agent_graph(tools: List[Tool], llm: LLMProviderBase, system_message: 
         messages = get_prompt_with_history(state)
 
         prompt_suffix = """
-        Based on the above, decide on the next best step. You can:
-        
-        1. Use a tool to gather more information by formatting your response as:
-        ```json
-        {
-          "action": "tool_name",
-          "action_input": "input_value" or {"param1": "value1", "param2": "value2"}
-        }
-        ```
-        
-        2. Provide a final answer when you've completed the task:
-        ```
-        Final Answer: Your comprehensive analysis or solution here.
-        ```
+            When you need to call a tool you MUST respond with *only* fenced JSON,
+            like this – no commentary, no Markdown other than the three back-ticks:
+                    
+            1. Use a tool to gather more information by formatting your response as:
+            ```json
+            { "action": "search_code",
+            "action_input": "<QUERY>"}
+            
+            OR
+            
+            ```json
+            { "action": "read_file",
+            "action_input": "<FILE_PATH>" } }   
+             
+            When you are done, reply with:
+            
+            ```
+            Final Answer: Your comprehensive analysis or solution here.
+            ```
         """
 
         # Add prompt suffix to guide response format
@@ -211,7 +216,7 @@ def create_agent_graph(tools: List[Tool], llm: LLMProviderBase, system_message: 
 
         # ---------- 1. fenced‑JSON tool call ------------
         tool_call = None
-        m = re.search(r"```json\s*(\{.*?\})\s*```", last_message, re.DOTALL)
+        m = re.search(r"(?:```json|json)\s*(\{.*?\})\s*(?:```)?", last_message, re.DOTALL)
         if m:
             try:
                 tool_call = json.loads(m.group(1))
@@ -370,7 +375,7 @@ class AgentFactory:
             cfg.repo_url, cfg.branch, cfg.embedding_function, base_dir, False
         )
         llm = self._get_llm(cfg)
-        tools = build_tools(index, llm)
+        tools = build_tools(index, llm, cfg)
         agent_graph = create_agent_graph(tools, llm, system_prompt)
 
         # Create a wrapper that mimics the AgentExecutor.run method
