@@ -36,7 +36,7 @@ repo_index = clone_and_index(
     repo_url="https://github.com/SyedGhazanferAnwar/NestJs-MovieApp",
     branch="master",
     embedding=EmbeddingMethod.SBERT,      # or EmbeddingMethod.OPENAI
-    base_dir="repos"                      # where to clone locally
+    cloned_repo_base_dir="repos"                      # where to clone locally
 )
 print("Indexed at:", repo_index.path)
 print("Directory snapshot:\n", repo_index.digest)
@@ -46,7 +46,7 @@ results = search(
     repo_url="https://github.com/SyedGhazanferAnwar/NestJs-MovieApp",
     branch="master",
     embedding=EmbeddingMethod.SBERT,
-    base_dir="repos",
+    cloned_repo_base_dir="repos",
     query="NestFactory",
     k=5
 )
@@ -60,7 +60,7 @@ result = agent_query(
     repo_url="https://github.com/WebGoat/WebGoat",
     branch="main",
     embedding=EmbeddingMethod.SBERT,
-    base_dir="repos",
+    cloned_repo_base_dir="repos",
     llm_provider=LLMProvider.ANTHROPIC,
     llm_model="claude-3-haiku-20240307",
     llm_temperature=0.0,
@@ -87,7 +87,7 @@ def clone_and_index(
     repo_url: str,
     branch: str = "main",
     embedding: EmbeddingMethod = EmbeddingMethod.SBERT,
-    base_dir: str = "."
+    cloned_repo_base_dir: str = "."
 ) -> RepoIndex
 ```
 
@@ -120,7 +120,7 @@ def search(
     embedding: EmbeddingMethod = EmbeddingMethod.SBERT,
     query: str = "",
     k: int = 8,
-    base_dir: str = "."
+    cloned_repo_base_dir: str = "."
 ) -> List[str]
 ```
 
@@ -140,7 +140,7 @@ def agent_query(
     repo_url: str,
     branch: str = "main",
     embedding: EmbeddingMethod = EmbeddingMethod.SBERT,
-    base_dir: str = str(Path.cwd()),
+    cloned_repo_base_dir: str = str(Path.cwd()),
     llm_provider: LLMProvider = LLMProvider.ANTHROPIC,
     llm_model: str = "claude-3-haiku-20240307",
     llm_temperature: float = 0.0,
