@@ -347,6 +347,7 @@ def clone_and_index(
 
     return RepoIndex(vector_store=vs, digest=digest, path=Path(repo_path))
 
+chroma_vs = None
 def search(
     repo_url: str,
     branch: str = "main",
@@ -360,41 +361,44 @@ def search(
     2. Load the existing `.kno/` Chroma DB
     3. Return the top‐k page_content for `query`
     """
-    repo_name = repo_url.rstrip("/").split("/")[-1].removesuffix(".git")
-    repo_path = os.path.join(cloned_repo_base_dir, repo_name)
+    global chroma_vs
+    if not chroma_vs:
+        repo_name = repo_url.rstrip("/").split("/")[-1].removesuffix(".git")
+        repo_path = os.path.join(cloned_repo_base_dir, repo_name)
 
-    if not Path(repo_path).exists():
-        Repo.clone_from(repo_url, repo_path, depth=1, branch=branch)
-    else:
-        Repo(repo_path).remotes.origin.pull(branch)
+        if not Path(repo_path).exists():
+            Repo.clone_from(repo_url, repo_path, depth=1, branch=branch)
+        else:
+            Repo(repo_path).remotes.origin.pull(branch)
 
-    # 2) locate .kno and filter for this embedding method
-    kno_root = Path(repo_path) / ".kno"
-    if not kno_root.exists():
-        raise FileNotFoundError(
-            f"No .kno directory in {repo_path}. Run clone_and_index first."
+        # 2) locate .kno and filter for this embedding method
+        kno_root = Path(repo_path) / ".kno"
+        if not kno_root.exists():
+            raise FileNotFoundError(
+                f"No .kno directory in {repo_path}. Run clone_and_index first."
+            )
+
+        prefix = f"embedding_{embedding.value}_"
+        cand_dirs = [
+            d for d in kno_root.iterdir() if d.is_dir() and d.name.startswith(prefix)
+        ]
+        if not cand_dirs:
+            raise ValueError(
+                f"No embedding folders for `{embedding.value}` found in {kno_root}"
+            )
+
+
+        latest_dir = max(cand_dirs, key=_ts)
+        embed_fn = (
+            OpenAIEmbeddings()
+            if embedding.value == "OpenAIEmbedding"
+            else SBERTEmbeddings()
+        )
+        chroma_vs = Chroma(
+            collection_name=repo_name,
+            embedding_function=embed_fn,
+            persist_directory=str(latest_dir),
         )
 
-    prefix = f"embedding_{embedding.value}_"
-    cand_dirs = [
-        d for d in kno_root.iterdir() if d.is_dir() and d.name.startswith(prefix)
-    ]
-    if not cand_dirs:
-        raise ValueError(
-            f"No embedding folders for `{embedding.value}` found in {kno_root}"
-        )
-
-    latest_dir = max(cand_dirs, key=_ts)
-    embed_fn = (
-        OpenAIEmbeddings()
-        if embedding.value == "OpenAIEmbedding"
-        else SBERTEmbeddings()
-    )
-    vs = Chroma(
-        collection_name=repo_name,
-        embedding_function=embed_fn,
-        persist_directory=str(latest_dir),
-    )
-
-    return [d.page_content for d in vs.similarity_search(query, k=k)]
+    return [d.page_content for d in chroma_vs.similarity_search(query, k=k)]
 
