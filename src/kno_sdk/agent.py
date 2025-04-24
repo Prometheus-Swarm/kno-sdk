@@ -38,7 +38,7 @@ class AgentConfig:
     repo_url: str
     branch: str = "main"
     llm_provider: str = "anthropic"
-    model_name: str = "claude-3-haiku-20240307"
+    model_name: str = "claude-3-5-haiku-latest"
     temperature: float = 0.0
     embedding_function: str = "SBERTEmbedding"
     max_tokens: int = 4096
@@ -397,7 +397,7 @@ def agent_query(
     embedding: EmbeddingMethod = EmbeddingMethod.SBERT,
     cloned_repo_base_dir: str = str(Path.cwd()),
     llm_provider: LLMProvider = LLMProvider.ANTHROPIC,
-    llm_model: str = "claude-3-haiku-20240307",
+    llm_model: str = "claude-3-5-haiku-latest",
     llm_temperature: float = 0.0,
     llm_max_tokens: int = 4096,
     llm_system_prompt: str = "",
