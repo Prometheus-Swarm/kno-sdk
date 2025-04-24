@@ -1,6 +1,6 @@
 Metadata-Version: 2.4
 Name: kno-sdk
-Version: 1.2.2
+Version: 1.3.1
 Summary: Clone GitHub repos, build embeddings, store in Chroma, and search.
 Author-email: Your Name <you@example.com>
 License: MIT
@@ -195,21 +195,6 @@ class EmbeddingMethod(str, Enum):
 ```
 
 Choose between OpenAI’s hosted embeddings or a local SBERT model.
-
-### RepoIndex
-
-```python
-class EmbeddingMethod(str, Enum):
-    OPENAI = "OpenAIEmbeddings"
-    SBERT  = "SBERTEmbeddings"
-```
-
-*   **path** — where the repository was cloned
-    
-*   **vector\_store** — live Chroma client for further queries
-    
-*   **digest** — human-readable directory listing (useful for context)
-    
 
 🔍 How It Works
 ---------------
