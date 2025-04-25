@@ -17,7 +17,7 @@ import time
 Language = get_language
 logger = logging.getLogger(__name__)
 
-INDEX_CHUNK_LIMIT = 400
+MAX_FALLBACK_LINES = 150
 TOKEN_LIMIT = 16_000  # per-chunk token cap
 
 LANG_NODE_TARGETS: Dict[str, Tuple[str, ...]] = {
@@ -42,6 +42,7 @@ EXT_TO_LANG = {
     ".jsx": "javascript",
     ".mjs": "javascript",
     ".cjs": "javascript",
+    ".json": "javascript",
     # TypeScript
     ".ts": "typescript",
     ".tsx": "typescript",
@@ -119,9 +120,7 @@ for lang_name in set(EXT_TO_LANG.values()):
     try:
         LANGUAGE_CACHE[lang_name] = Language(lang_name)
     except TypeError:
-        logger.warning(
-            "No grammar for %s (%s) – falling back to line chunking", lang_name, exc
-        )
+        logger.warning("No grammar for %s – falling back to line chunking", lang_name)
 
 
 PARSER_CACHE: Dict[str, Parser] = {
@@ -129,18 +128,18 @@ PARSER_CACHE: Dict[str, Parser] = {
     for lang, lang_obj in LANGUAGE_CACHE.items()
 }
 
+
 class EmbeddingMethod(str, Enum):
     OPENAI = "OpenAIEmbedding"
     SBERT = "SBERTEmbedding"
+
 
 class RepoIndex:
     path: Path
     vector_store: Chroma
     digest: str
 
-    def __init__(
-        self, vector_store: Chroma, digest: str, path: Path = Path.cwd()
-    ):
+    def __init__(self, vector_store: Chroma, digest: str, path: Path = Path.cwd()):
         self.path = path
         self.vector_store = vector_store
         self.digest = digest
@@ -191,13 +190,14 @@ def _extract_semantic_chunks(path: Path, text: str) -> List[str]:
     return chunks
 
 
-def _fallback_line_chunks(text: str) -> List[str]:
+def _fallback_line_chunks(path: Path, text: str) -> List[str]:
     lines = text.splitlines()
-    return [
-        "\n".join(lines[i : i + INDEX_CHUNK_LIMIT])
-        for i in range(0, len(lines), INDEX_CHUNK_LIMIT)
-    ]
-
+    chunks = []
+    for i in range(0, len(lines), MAX_FALLBACK_LINES):
+        header = f"// {path}:{i+1}-{min(i+MAX_FALLBACK_LINES,len(lines))}\n"
+        body = "\n".join(lines[i : i + MAX_FALLBACK_LINES])
+        chunks.append(header + body)
+    return chunks
 
 
 class SBERTEmbeddings(Embeddings):
@@ -234,6 +234,7 @@ def _build_directory_digest(
             break
     return "\n".join(lines)
 
+
 # 3) parse out the timestamp and pick the max
 def _ts(d: Path) -> int:
     parts = d.name.split("_")
@@ -249,6 +250,7 @@ def clone_and_index(
     embedding: EmbeddingMethod = EmbeddingMethod.SBERT,
     cloned_repo_base_dir: str = str(Path.cwd()),
     should_reindex: bool = True,
+    should_push_to_repo: bool = True,
 ) -> RepoIndex:
     """
     1. Clone or pull `repo_url`
@@ -330,8 +332,10 @@ def clone_and_index(
                 continue
             content = fp.read_text(errors="ignore")
             chunks = _extract_semantic_chunks(fp, content) or _fallback_line_chunks(
-                content
+                fp, content
             )
+            for i, chunk in enumerate(chunks, 1):
+                print(f"--- Result #{i} ---\n{chunk}\n")
             for chunk in chunks:
                 texts.append(chunk[:TOKEN_LIMIT])
                 metas.append({"source": str(fp.relative_to(repo_path))})
@@ -340,14 +344,21 @@ def clone_and_index(
 
     # 4. commit & push .kno
     # get path relative to repo root:
-    relative_kno = os.path.relpath(str(kno_dir), str(repo_path))
-    repo.git.add(str(relative_kno))
-    repo.index.commit("Add/update .kno embedding database")
-    repo.remote().push(branch)
+    if should_push_to_repo:
+        try:
+            logger.info("Pushing .kno to %s", repo_url)
+            relative_kno = os.path.relpath(str(kno_dir), str(repo_path))
+            repo.git.add(str(relative_kno))
+            repo.index.commit("Add/update .kno embedding database")
+            repo.remote().push(branch)
+        except Exception as e:
+            logger.warning("Failed to push .kno to %s: %s", repo_url, e)
 
     return RepoIndex(vector_store=vs, digest=digest, path=Path(repo_path))
 
+
 chroma_vs = None
+
 def search(
     repo_url: str,
     branch: str = "main",
@@ -387,7 +398,6 @@ def search(
                 f"No embedding folders for `{embedding.value}` found in {kno_root}"
             )
 
-
         latest_dir = max(cand_dirs, key=_ts)
         embed_fn = (
             OpenAIEmbeddings()
@@ -401,4 +411,3 @@ def search(
         )
 
     return [d.page_content for d in chroma_vs.similarity_search(query, k=k)]
-
