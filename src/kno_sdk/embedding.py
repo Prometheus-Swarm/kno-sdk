@@ -334,8 +334,6 @@ def clone_and_index(
             chunks = _extract_semantic_chunks(fp, content) or _fallback_line_chunks(
                 fp, content
             )
-            for i, chunk in enumerate(chunks, 1):
-                print(f"--- Result #{i} ---\n{chunk}\n")
             for chunk in chunks:
                 texts.append(chunk[:TOKEN_LIMIT])
                 metas.append({"source": str(fp.relative_to(repo_path))})
