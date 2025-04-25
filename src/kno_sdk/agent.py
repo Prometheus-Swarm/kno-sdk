@@ -145,30 +145,9 @@ def create_agent_graph(tools: List[Tool], llm: LLMProviderBase, system_message: 
     def agent_thinking(state: AgentState) -> AgentState:
         messages = get_prompt_with_history(state)
 
-        prompt_suffix = """
-            When you need to call a tool you MUST respond with *only* fenced JSON,
-            like this – no commentary, no Markdown other than the three back-ticks:
-                    
-            1. Use a tool to gather more information by formatting your response as:
-            ```json
-            { "action": "search_code",
-            "action_input": "<QUERY>"}
-            
-            OR
-            
-            ```json
-            { "action": "read_file",
-            "action_input": "<FILE_PATH>" } }   
-             
-            When you are done, reply with:
-            
-            ```
-            Final Answer: Your comprehensive analysis or solution here.
-            ```
-        """
 
-        # Add prompt suffix to guide response format
-        messages.append({"role": "user", "content": prompt_suffix})
+        # # Add prompt suffix to guide response format
+        # messages.append({"role": "user", "content": prompt_suffix})
 
         # Get response from LLM
         response = llm.invoke(messages)
@@ -193,7 +172,7 @@ def create_agent_graph(tools: List[Tool], llm: LLMProviderBase, system_message: 
         last_message = state["messages"][-1]["content"] if state["messages"] else ""
 
         # ---------- exit early on final answer ----------
-        if "Final Answer:" in last_message:
+        if "Final Answer:" in last_message and not all(k in tool_call for k in ("action", "action_input")):
             return {**state, "iterations": state["iterations"] + 1}
 
         # ---------- 1. fenced‑JSON tool call ------------
@@ -310,7 +289,7 @@ def create_agent_graph(tools: List[Tool], llm: LLMProviderBase, system_message: 
             state["messages"].append(
                 {
                     "role": "user",
-                    "content": "You have hit the step limit. Summarise now using 'Final Answer:'.",
+                    "content": "You have reached the step limit. Respond now with your output as 'Final Answer:'.",
                 }
             )
             return "continue"
@@ -418,8 +397,32 @@ def agent_query(
         max_tokens=llm_max_tokens,
         cloned_repo_base_dir=cloned_repo_base_dir
     )
+    prompt_suffix = """
+            When you need to call a tool you MUST respond with *only* fenced JSON,
+            like this – no commentary, no Markdown other than the three back-ticks:
+                    
+            1. Use a tool to gather more information by formatting your response as:
+            ```json
+            { "action": "search_code",
+            "action_input": "<QUERY>"}
+            
+            OR
+            
+            ```json
+            { "action": "read_file",
+            "action_input": "<FILE_PATH>" } }   
+             
+            When you are done, reply with:
+            
+            ```
+            Final Answer: Your comprehensive analysis or solution here.
+            ```
+            IMPORTANT: Do not respond with tool call and Final Answer in one response.
+        """
+    system_message = llm_system_prompt.strip() + "\n\n" + prompt_suffix
+
     agent = AgentFactory().create_agent(
-        cfg, cloned_repo_base_dir=cloned_repo_base_dir, system_prompt=llm_system_prompt
+        cfg, cloned_repo_base_dir=cloned_repo_base_dir, system_prompt=system_message
     )
     result = agent.run(prompt)
     return result

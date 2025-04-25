@@ -5,11 +5,11 @@ import os
 from dotenv import load_dotenv
 
 load_dotenv()
-
+# Forking
 # x = clone_and_index("https://github.com/gothinkster/node-express-realworld-example-app", branch="master", embedding=EmbeddingMethod.SBERT, cloned_repo_base_dir="repos",should_push_to_repo=False)
 # print(x)
 
-repo_url = "https://github.com/gothinkster/node-express-realworld-example-app"
+repo_url = "https://github.com/SyedGhazanferAnwar/NestJs-MovieApp"
 branch = "master"
 system_prompt = f"""
             You are a senior code‑analysis agent working **on the repository below**.
