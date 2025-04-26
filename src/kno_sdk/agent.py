@@ -172,7 +172,7 @@ def create_agent_graph(tools: List[Tool], llm: LLMProviderBase, system_message: 
         last_message = state["messages"][-1]["content"] if state["messages"] else ""
 
         # ---------- exit early on final answer ----------
-        if "Final Answer:" in last_message and not all(k in tool_call for k in ("action", "action_input")):
+        if "#Final-Answer:" in last_message and not all(k in tool_call for k in ("action", "action_input")):
             return {**state, "iterations": state["iterations"] + 1}
 
         # ---------- 1. fenced‑JSON tool call ------------
@@ -208,7 +208,7 @@ def create_agent_graph(tools: List[Tool], llm: LLMProviderBase, system_message: 
                             "I couldn’t recognise a tool call. "
                             "Reply either with valid\n"
                             '```json\n{ "action": "tool", "action_input": … }\n```\n'
-                            "or finish with **Final Answer:**."
+                            "or finish with **#Final-Answer:**."
                         ),
                     }
                 ],
@@ -228,7 +228,7 @@ def create_agent_graph(tools: List[Tool], llm: LLMProviderBase, system_message: 
             ):
                 warn_msg = (
                     f"You already ran `{tool_name}` with that exact input. "
-                    "I'll skip that and you can choose another action or finish with **Final Answer:**."
+                    "I'll skip that and you can choose another action or finish with **#Final-Answer:**."
                 )
                 # Append a system message (not a new tool step), and do not bump iterations
                 return {
@@ -281,7 +281,7 @@ def create_agent_graph(tools: List[Tool], llm: LLMProviderBase, system_message: 
     def should_continue(state: AgentState) -> str:
         # Check for final answer
         last_message = state["messages"][-1]["content"] if state["messages"] else ""
-        if "Final Answer:" in last_message:
+        if "#Final-Answer:" in last_message:
             return "end"
 
         if state["iterations"] >= MAX_ITERATIONS:
@@ -289,7 +289,7 @@ def create_agent_graph(tools: List[Tool], llm: LLMProviderBase, system_message: 
             state["messages"].append(
                 {
                     "role": "user",
-                    "content": "You have reached the step limit. Respond now with your output as 'Final Answer:'.",
+                    "content": "You have reached the step limit. Respond now with your output as '#Final-Answer:'.",
                 }
             )
             return "continue"
@@ -361,10 +361,10 @@ class AgentFactory:
                         state, {"recursion_limit": MAX_ITERATIONS * 2}
                     )  # one step
                     last = state["messages"][-1]["content"] if state["messages"] else ""
-                    if "Final Answer:" in last or state["iterations"] >= MAX_ITERATIONS:
+                    if "#Final-Answer:" in last or state["iterations"] >= MAX_ITERATIONS:
                         break
 
-                match = re.search(r"Final Answer:(.*)", last, re.DOTALL)
+                match = re.search(r"#Final-Answer:(.*)", last, re.DOTALL)
                 return match.group(1).strip() if match else last
 
         return AgentGraphRunner(agent_graph)
@@ -415,7 +415,7 @@ def agent_query(
             When you are done, reply with:
             
             ```
-            Final Answer: Your comprehensive analysis or solution here.
+            #Final-Answer: Your comprehensive analysis or solution here.
             ```
             IMPORTANT: Do not respond with tool call and Final Answer in one response.
         """
