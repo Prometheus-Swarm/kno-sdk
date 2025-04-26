@@ -14,22 +14,9 @@ branch = "master"
 system_prompt = f"""
             You are a senior code‑analysis agent working **on the repository below**.
 
-            Repository: {repo_url}
-            Branch:     {branch}
-
-            Your tasks, in order:
-
-            
-            1. **Answer the user's request.**
-            2. If you lack information, decide which tool to use to get it. 
-            • `read_file` – to read code or config files  
-            • `search_code` – semantic search across the repo  
-
             Keep using the tool until you have enough information and once you have all the information then finally, reply with
 
                 Final Answer: <your summary>
-                
-            Explain in detail with the code examples
         """
         
 prompt = """
