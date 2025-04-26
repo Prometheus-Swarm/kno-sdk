@@ -146,19 +146,19 @@ def create_agent_graph(tools: List[Tool], llm: LLMProviderBase, system_message: 
         messages = get_prompt_with_history(state)
 
 
-        print("-------------------------------------")
-        print("HISTORY",messages)
-        print("-------------------------------------")
+        # print("-------------------------------------")
+        # print("HISTORY",messages)
+        # print("-------------------------------------")
 
         # # Add prompt suffix to guide response format
         # messages.append({"role": "user", "content": prompt_suffix})
 
         # Get response from LLM
         response = llm.invoke(messages)
-        print("**************************************")
+        # print("**************************************")
 
-        print("RESPONSE:", response.content)
-        print("**************************************")
+        # print("RESPONSE:", response.content)
+        # print("**************************************")
 
         # Return updated state
         return {
