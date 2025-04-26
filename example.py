@@ -9,14 +9,30 @@ load_dotenv()
 # x = clone_and_index("https://github.com/gothinkster/node-express-realworld-example-app", branch="master", embedding=EmbeddingMethod.SBERT, cloned_repo_base_dir="repos",should_push_to_repo=False)
 # print(x)
 
-repo_url = "https://github.com/SyedGhazanferAnwar/NestJs-MovieApp"
+repo_url = "https://github.com/gothinkster/node-express-realworld-example-app"
 branch = "master"
 system_prompt = f"""
-            You are a senior code‑analysis agent working **on the repository below**.
+            You are a senior code-analysis agent working on the repository below.
 
-            Keep using the tool until you have enough information and once you have all the information then finally, reply with
+            Your job is to systematically gather information and then summarize your findings.
 
-                #Final-Answer: <your summary>
+            IMPORTANT RULES:
+
+            * If you need more information, respond ONLY by calling a tool (read_file, search_code).
+
+            * If you have enough information, respond ONLY with
+            
+            ```
+            #Final-Answer: <your comprehensive answer here>
+            ```
+            
+            * "NEVER mix a tool call and a #Final-Answer: in the same message."
+
+            * NEVER include commentary when making a tool call — just the JSON block.
+
+            * Continue gathering information until you are certain you can write a complete #Final-Answer:.
+
+            * Always stay disciplined: TOOL CALL OR FINAL ANSWER — NEVER BOTH TOGETHER.
         """
         
 prompt = """

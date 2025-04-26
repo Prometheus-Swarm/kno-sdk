@@ -114,8 +114,8 @@ def build_tools(index: RepoIndex, llm: LLMProviderBase, cfg: AgentConfig) -> Lis
             return f"Error reading file {file_path}: {str(e)}"
 
     return [
-        Tool(name="search_code", func=search_code, description="Semantic code search in the repo"),
-        Tool(name="read_file", func=read_file, description="Read a particular file content in the repo"),
+        Tool(name="search_code", func=search_code, description="Semantic code search in the repo, Input is a CODE SNIPPET"),
+        Tool(name="read_file", func=read_file, description="Read a particular file content in the repo, Input is a file path"),
     ]
 
 
@@ -146,11 +146,19 @@ def create_agent_graph(tools: List[Tool], llm: LLMProviderBase, system_message: 
         messages = get_prompt_with_history(state)
 
 
+        print("-------------------------------------")
+        print("HISTORY",messages)
+        print("-------------------------------------")
+
         # # Add prompt suffix to guide response format
         # messages.append({"role": "user", "content": prompt_suffix})
 
         # Get response from LLM
         response = llm.invoke(messages)
+        print("**************************************")
+
+        print("RESPONSE:", response.content)
+        print("**************************************")
 
         # Return updated state
         return {
@@ -172,7 +180,7 @@ def create_agent_graph(tools: List[Tool], llm: LLMProviderBase, system_message: 
         last_message = state["messages"][-1]["content"] if state["messages"] else ""
 
         # ---------- exit early on final answer ----------
-        if "#Final-Answer:" in last_message and not all(k in tool_call for k in ("action", "action_input")):
+        if "#Final-Answer:" in last_message:
             return {**state, "iterations": state["iterations"] + 1}
 
         # ---------- 1. fenced‑JSON tool call ------------
@@ -253,15 +261,11 @@ def create_agent_graph(tools: List[Tool], llm: LLMProviderBase, system_message: 
                 new_steps = state["intermediate_steps"] + [
                     ({"name": tool_name, "arguments": tool_input}, result)
                 ]
-                tool_msg = {
-                    "role": "assistant",
-                    "content": f"```json\n{json.dumps(tool_call, indent=2)}\n```",
-                }
                 obs_msg = {"role": "user", "content": f"Observation: {result}"}
 
                 return {
                     **state,
-                    "messages": state["messages"] + [tool_msg, obs_msg],
+                    "messages": state["messages"] + [obs_msg],
                     "intermediate_steps": new_steps,
                     "iterations": state["iterations"] + 1,
                 }
@@ -399,12 +403,12 @@ def agent_query(
     )
     prompt_suffix = """
             When you need to call a tool you MUST respond with *only* fenced JSON,
-            like this – no commentary, no Markdown other than the three back-ticks:
+            like below – no commentary, no Markdown other than the three back-ticks:
                     
             1. Use a tool to gather more information by formatting your response as:
             ```json
             { "action": "search_code",
-            "action_input": "<QUERY>"}
+            "action_input": "<CODE SNIPPET>"}
             
             OR
             
@@ -417,7 +421,7 @@ def agent_query(
             ```
             #Final-Answer: Your comprehensive analysis or solution here.
             ```
-            IMPORTANT: Do not respond with tool call and Final Answer in one response.
+            IMPORTANT: Do not respond with tool call and #Final-Answer: in one response.
         """
     system_message = llm_system_prompt.strip() + "\n\n" + prompt_suffix
 
