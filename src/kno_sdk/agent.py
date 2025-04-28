@@ -26,7 +26,6 @@ TOKEN_LIMIT = 16_000  # per-chunk token cap
 MAX_ITERATIONS = 30
 
 
-
 class LLMProvider(str, Enum):
     OPENAI = "openai"
     ANTHROPIC = "anthropic"
@@ -75,7 +74,14 @@ def build_tools(index: RepoIndex, llm: LLMProviderBase, cfg: AgentConfig) -> Lis
                 f"Please provide a search query. Repository structure:\n{index.digest}"
             )
         # 1) retrieve top‑k code snippets
-        snippets = search(repo_url=cfg.repo_url, branch=cfg.branch, embedding=EmbeddingMethod.SBERT, cloned_repo_base_dir=cfg.cloned_repo_base_dir,query=query, k=k)
+        snippets = search(
+            repo_url=cfg.repo_url,
+            branch=cfg.branch,
+            embedding=EmbeddingMethod.SBERT,
+            cloned_repo_base_dir=cfg.cloned_repo_base_dir,
+            query=query,
+            k=k,
+        )
         context = "\n\n---\n\n".join(snippets)
 
         # 2) build a RAG prompt
@@ -114,8 +120,16 @@ def build_tools(index: RepoIndex, llm: LLMProviderBase, cfg: AgentConfig) -> Lis
             return f"Error reading file {file_path}: {str(e)}"
 
     return [
-        Tool(name="search_code", func=search_code, description="Semantic code search in the repo, Input is a CODE SNIPPET"),
-        Tool(name="read_file", func=read_file, description="Read a particular file content in the repo, Input is a file path"),
+        Tool(
+            name="search_code",
+            func=search_code,
+            description="Semantic code search in the repo, Input is a CODE SNIPPET",
+        ),
+        Tool(
+            name="read_file",
+            func=read_file,
+            description="Read a particular file content in the repo, Input is a file path",
+        ),
     ]
 
 
@@ -130,7 +144,12 @@ class AgentState(TypedDict):
     iterations: int
 
 
-def create_agent_graph(tools: List[Tool], llm: LLMProviderBase, system_message: str):
+def create_agent_graph(
+    tools: List[Tool],
+    llm: LLMProviderBase,
+    system_message: str,
+    output_format: str | None = None,
+):
     """Create a LangGraph agent with the provided tools and LLM."""
 
     # Function to formulate prompt with history and tool results
@@ -144,7 +163,6 @@ def create_agent_graph(tools: List[Tool], llm: LLMProviderBase, system_message: 
     # Node 1: Agent thinks about what to do next
     def agent_thinking(state: AgentState) -> AgentState:
         messages = get_prompt_with_history(state)
-
 
         # print("-------------------------------------")
         # print("HISTORY",messages)
@@ -167,6 +185,33 @@ def create_agent_graph(tools: List[Tool], llm: LLMProviderBase, system_message: 
             + [{"role": "assistant", "content": response.content}],
         }
 
+    def format_output(state: AgentState) -> AgentState:
+        messages = get_prompt_with_history(state)
+        output = ""
+        if output_format:
+            # # Add prompt suffix to guide response format
+            messages.append(
+                {
+                    "role": "user",
+                    "content": "FORMAT THE OUTPUT EXACTLY IN THE BELOW FORMAT, with any data not available make it empty string "
+                    + output_format,
+                }
+            )
+
+            # Get response from LLM
+            response = llm.invoke(messages)
+            output = response.content
+            # print("**************************************")
+        else:
+            response = state["messages"][-1];
+            output = response["content"]
+        # Return updated state
+        return {
+            **state,
+            "messages": state["messages"]
+            + [{"role": "assistant", "content": f"#Final-Answer: {output}"}],
+        }
+
     # Node 2: Parse action and execute tool if needed
     def execute_tools(state: AgentState) -> AgentState:
         """
@@ -185,7 +230,9 @@ def create_agent_graph(tools: List[Tool], llm: LLMProviderBase, system_message: 
 
         # ---------- 1. fenced‑JSON tool call ------------
         tool_call = None
-        m = re.search(r"(?:```json|json)\s*(\{.*?\})\s*(?:```)?", last_message, re.DOTALL)
+        m = re.search(
+            r"(?:```json|json)\s*(\{.*?\})\s*(?:```)?", last_message, re.DOTALL
+        )
         if m:
             try:
                 tool_call = json.loads(m.group(1))
@@ -213,7 +260,7 @@ def create_agent_graph(tools: List[Tool], llm: LLMProviderBase, system_message: 
                     {
                         "role": "assistant",
                         "content": (
-                            "I couldn’t recognise a tool call. "
+                            "I couldn’t recognise a tool call. Use `read_file` or `search_code` \n "
                             "Reply either with valid\n"
                             '```json\n{ "action": "tool", "action_input": … }\n```\n'
                             "or finish with **#Final-Answer:**."
@@ -286,7 +333,7 @@ def create_agent_graph(tools: List[Tool], llm: LLMProviderBase, system_message: 
         # Check for final answer
         last_message = state["messages"][-1]["content"] if state["messages"] else ""
         if "#Final-Answer:" in last_message:
-            return "end"
+            return "format_output"
 
         if state["iterations"] >= MAX_ITERATIONS:
             # force the model to wrap up instead of ending the graph
@@ -306,12 +353,16 @@ def create_agent_graph(tools: List[Tool], llm: LLMProviderBase, system_message: 
     # Add nodes
     workflow.add_node("agent", agent_thinking)
     workflow.add_node("tools", execute_tools)
+    workflow.add_node("format_output", format_output)
 
     # Add edges
     workflow.add_conditional_edges(
-        "agent", should_continue, {"continue": "tools", "end": END}
+        "agent",
+        should_continue,
+        {"continue": "tools", "format_output": "format_output"},
     )
     workflow.add_edge("tools", "agent")
+    workflow.add_edge("format_output", END)
 
     # Set entry point
     workflow.set_entry_point("agent")
@@ -334,14 +385,22 @@ class AgentFactory:
         raise ValueError(f"Unknown provider: {cfg.llm_provider}")
 
     def create_agent(
-        self, cfg: AgentConfig, cloned_repo_base_dir: str = str(Path.cwd()), system_prompt: str = ""
+        self,
+        cfg: AgentConfig,
+        cloned_repo_base_dir: str = str(Path.cwd()),
+        system_prompt: str = "",
+        output_format: str | None = None,
     ):
         index = clone_and_index(
-            cfg.repo_url, cfg.branch, cfg.embedding_function, cloned_repo_base_dir, False
+            cfg.repo_url,
+            cfg.branch,
+            cfg.embedding_function,
+            cloned_repo_base_dir,
+            False,
         )
         llm = self._get_llm(cfg)
         tools = build_tools(index, llm, cfg)
-        agent_graph = create_agent_graph(tools, llm, system_prompt)
+        agent_graph = create_agent_graph(tools, llm, system_prompt, output_format)
 
         # Create a wrapper that mimics the AgentExecutor.run method
         class AgentGraphRunner:
@@ -365,14 +424,17 @@ class AgentFactory:
                         state, {"recursion_limit": MAX_ITERATIONS * 2}
                     )  # one step
                     last = state["messages"][-1]["content"] if state["messages"] else ""
-                    if "#Final-Answer:" in last or state["iterations"] >= MAX_ITERATIONS:
+                    if (
+                        "#Final-Answer:" in last
+                        or state["iterations"] >= MAX_ITERATIONS
+                    ):
                         break
 
                 match = re.search(r"#Final-Answer:(.*)", last, re.DOTALL)
                 return match.group(1).strip() if match else last
 
         return AgentGraphRunner(agent_graph)
-    
+
 
 def agent_query(
     repo_url: str,
@@ -386,6 +448,7 @@ def agent_query(
     llm_system_prompt: str = "",
     prompt: str = "",
     MODEL_API_KEY: str = "",
+    output_format: str | None = None,
 ):
     if LLMProvider.ANTHROPIC:
         os.environ["ANTHROPIC_API_KEY"] = MODEL_API_KEY
@@ -399,9 +462,27 @@ def agent_query(
         embedding_function=embedding.value,
         temperature=llm_temperature,
         max_tokens=llm_max_tokens,
-        cloned_repo_base_dir=cloned_repo_base_dir
+        cloned_repo_base_dir=cloned_repo_base_dir,
     )
     prompt_suffix = """
+            IMPORTANT RULES:
+
+            * If you need more information, respond ONLY by calling a tool (read_file, search_code).
+
+            * If you have enough information, respond ONLY with
+            
+            ```
+            #Final-Answer: <your comprehensive answer here>
+            ```
+            
+            * "NEVER mix a tool call and a #Final-Answer: in the same message."
+
+            * NEVER include commentary when making a tool call — just the JSON block.
+
+            * Continue gathering information until you are certain you can write a complete #Final-Answer:.
+
+            * Always stay disciplined: single TOOL CALL OR FINAL ANSWER — NEVER BOTH TOGETHER.
+            
             When you need to call a tool you MUST respond with *only* fenced JSON,
             like below – no commentary, no Markdown other than the three back-ticks:
                     
@@ -426,7 +507,10 @@ def agent_query(
     system_message = llm_system_prompt.strip() + "\n\n" + prompt_suffix
 
     agent = AgentFactory().create_agent(
-        cfg, cloned_repo_base_dir=cloned_repo_base_dir, system_prompt=system_message
+        cfg,
+        cloned_repo_base_dir=cloned_repo_base_dir,
+        system_prompt=system_message,
+        output_format=output_format,
     )
     result = agent.run(prompt)
     return result
