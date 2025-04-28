@@ -1,4 +1,4 @@
-from typing import Dict, List, Tuple, Optional, Any, TypedDict
+from typing import Dict, List, Tuple, Optional, Any, TypedDict, Union
 from tree_sitter_languages import get_language
 from tree_sitter import Parser
 from langchain_chroma import Chroma
@@ -244,76 +244,92 @@ def _ts(d: Path) -> int:
         return 0
 
 
-def clone_and_index(
+def clone_repo(
     repo_url: str,
     branch: str = "main",
-    embedding: EmbeddingMethod = EmbeddingMethod.SBERT,
     cloned_repo_base_dir: str = str(Path.cwd()),
-    should_reindex: bool = True,
-    should_push_to_repo: bool = True,
-) -> RepoIndex:
+) -> Path:
     """
-    1. Clone or pull `repo_url`
-    2. Embed each file into a Chroma collection in `.kno/`
-    3. Commit & push the `.kno/` folder back to `repo_url`.
+    Clone or pull a repository.
+    
+    Args:
+        repo_url: Git HTTPS/SSH URL
+        branch: Branch to clone or update (default: main)
+        cloned_repo_base_dir: Local directory to clone into (default: current working dir)
+        
+    Returns:
+        Path to the cloned repository
     """
-    if isinstance(embedding, str):
-        embedding = EmbeddingMethod(embedding)  # raises ValueError if invalid
-
     repo_name = repo_url.rstrip("/").split("/")[-1].removesuffix(".git")
     repo_path = os.path.join(cloned_repo_base_dir, repo_name)
-    kno_dir = os.path.join(repo_path, ".kno")
-    skip_dirs = {".git", "node_modules", "build", "dist", "target", ".vscode", ".kno"}
-    skip_files = {"package-lock.json", "yarn.lock", ".prettierignore"}
-    digest = _build_directory_digest(repo_path, skip_dirs, skip_files)
-
-    # 1. clone or pull
+    
     if not Path(repo_path).exists():
         logger.info("Cloning %s → %s", repo_url, repo_path)
         Repo.clone_from(repo_url, repo_path, depth=1, branch=branch)
     else:
         logger.info("Pulling latest on %s", repo_name)
         Repo(repo_path).remotes.origin.pull(branch)
-    if not should_reindex:
-        # 2) locate .kno and filter for this embedding method
-        kno_root = Path(repo_path) / ".kno"
-        if not kno_root.exists():
-            raise FileNotFoundError(
-                f"No .kno directory in {repo_path}. Run clone_and_index first."
-            )
+        
+    return Path(repo_path)
 
-        prefix = f"embedding_{embedding.value}_"
-        cand_dirs = [
-            d for d in kno_root.iterdir() if d.is_dir() and d.name.startswith(prefix)
-        ]
-        if not cand_dirs:
-            raise ValueError(
-                f"No embedding folders for `{embedding.value}` found in {kno_root}"
-            )
 
-        latest_dir = max(cand_dirs, key=_ts)
-        embed_fn = (
-            OpenAIEmbeddings()
-            if embedding.value == "OpenAIEmbedding"
-            else SBERTEmbeddings()
-        )
-        vs = Chroma(
-            collection_name=repo_name,
-            embedding_function=embed_fn,
-            persist_directory=str(latest_dir),
-        )
-        return RepoIndex(vector_store=vs, digest=digest, path=Path(repo_path))
+def push_to_repo(repo_path: Path) -> None:
+    """
+    Push the .kno folder back to the remote repository.
+    
+    Args:
+        repo_path: Path to the cloned repository
+    """
+    repo = Repo(repo_path)
+    kno_dir = os.path.join(repo_path, ".kno")
+    try:
+        logger.info("Pushing .kno to %s", repo_path)
+        relative_kno = os.path.relpath(str(kno_dir), str(repo_path))
+        repo.git.add(str(relative_kno))
+        repo.index.commit("Add/update .kno embedding database")
+        repo.remote().push()
+    except Exception as e:
+        logger.warning("Failed to push .kno to %s: %s", repo_path, e)
+
+
+def index_repo(
+    repo_path: Path,
+    embedding: Union[EmbeddingMethod, str] = EmbeddingMethod.SBERT,
+) -> RepoIndex:
+    """
+    Index a repository that has already been cloned.
+    
+    Args:
+        repo_path: Path to the cloned repository
+        embedding: EmbeddingMethod.OPENAI or EmbeddingMethod.SBERT, or their string values
+        
+    Returns:
+        RepoIndex object with the vector store and repository information
+    """
+    if isinstance(embedding, str):
+        try:
+            embedding = EmbeddingMethod(embedding)  # Convert string to enum
+        except ValueError:
+            raise ValueError(f"Invalid embedding method: {embedding}. Must be one of {[e.value for e in EmbeddingMethod]}")
 
     repo = Repo(repo_path)
-    commit = repo.head.commit.hexsha[:7]
-    time_ms = int(time.time() * 1000)
-    subdir = f"embedding_{embedding.value}_{time_ms}_{commit}"
+    repo_name = repo_path.name
+    kno_dir = os.path.join(repo_path, ".kno")
+    skip_dirs = {".git", "node_modules", "build", "dist", "target", ".vscode", ".kno"}
+    skip_files = {"package-lock.json", "yarn.lock", ".prettierignore"}
+    digest = _build_directory_digest(repo_path, skip_dirs, skip_files)
+
     # 2. choose embedding
     embed_fn = (
         OpenAIEmbeddings()
         if embedding.value == "OpenAIEmbedding"
         else SBERTEmbeddings()
     )
+    
+    commit = repo.head.commit.hexsha[:7]
+    time_ms = int(time.time() * 1000)
+    subdir = f"embedding_{embedding.value}_{time_ms}_{commit}"
+    
     vs = Chroma(
         collection_name=repo_name,
         embedding_function=embed_fn,
@@ -340,19 +356,68 @@ def clone_and_index(
         vs.add_texts(texts=texts, metadatas=metas)
         logger.info("Embedded %d chunks", len(texts))
 
-    # 4. commit & push .kno
-    # get path relative to repo root:
-    if should_push_to_repo:
-        try:
-            logger.info("Pushing .kno to %s", repo_url)
-            relative_kno = os.path.relpath(str(kno_dir), str(repo_path))
-            repo.git.add(str(relative_kno))
-            repo.index.commit("Add/update .kno embedding database")
-            repo.remote().push(branch)
-        except Exception as e:
-            logger.warning("Failed to push .kno to %s: %s", repo_url, e)
+    return RepoIndex(vector_store=vs, digest=digest, path=repo_path)
 
-    return RepoIndex(vector_store=vs, digest=digest, path=Path(repo_path))
+
+def clone_and_index(
+    repo_url: str,
+    branch: str = "main",
+    embedding: Union[EmbeddingMethod, str] = EmbeddingMethod.SBERT,
+    cloned_repo_base_dir: str = str(Path.cwd()),
+    should_reindex: bool = True,
+    should_push_to_repo: bool = True,
+) -> RepoIndex:
+    """
+    1. Clone or pull `repo_url`
+    2. Embed each file into a Chroma collection in `.kno/`
+    3. Optionally commit & push the `.kno/` folder back to `repo_url`.
+    """
+    repo_path = clone_repo(repo_url, branch, cloned_repo_base_dir)
+    
+    if not should_reindex:
+        # 2) locate .kno and filter for this embedding method
+        kno_root = Path(repo_path) / ".kno"
+        if not kno_root.exists():
+            raise FileNotFoundError(
+                f"No .kno directory in {repo_path}. Run clone_and_index first."
+            )
+
+        # Handle string input for embedding
+        if isinstance(embedding, str):
+            try:
+                embedding = EmbeddingMethod(embedding)
+            except ValueError:
+                raise ValueError(f"Invalid embedding method: {embedding}. Must be one of {[e.value for e in EmbeddingMethod]}")
+
+        prefix = f"embedding_{embedding.value}_"
+        cand_dirs = [
+            d for d in kno_root.iterdir() if d.is_dir() and d.name.startswith(prefix)
+        ]
+        if not cand_dirs:
+            raise ValueError(
+                f"No embedding folders for `{embedding.value}` found in {kno_root}"
+            )
+
+        latest_dir = max(cand_dirs, key=_ts)
+        embed_fn = (
+            OpenAIEmbeddings()
+            if embedding.value == "OpenAIEmbedding"
+            else SBERTEmbeddings()
+        )
+        vs = Chroma(
+            collection_name=repo_path.name,
+            embedding_function=embed_fn,
+            persist_directory=str(latest_dir),
+        )
+        skip_dirs = {".git", "node_modules", "build", "dist", "target", ".vscode", ".kno"}
+        skip_files = {"package-lock.json", "yarn.lock", ".prettierignore"}
+        digest = _build_directory_digest(repo_path, skip_dirs, skip_files)
+        return RepoIndex(vector_store=vs, digest=digest, path=repo_path)
+    
+    repo_index = index_repo(repo_path, embedding)
+    if should_push_to_repo:
+        push_to_repo(repo_path)
+    return repo_index
 
 
 chroma_vs = None
