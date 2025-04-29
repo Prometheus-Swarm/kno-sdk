@@ -5,114 +5,18 @@ from langchain_chroma import Chroma
 from langchain.embeddings.base import Embeddings
 from sentence_transformers import SentenceTransformer
 from langchain_openai import OpenAIEmbeddings, ChatOpenAI
-from enum import Enum
 from git import Repo
-
 import logging
 from pathlib import Path
 import os
 import time
 
+from .constant import EXT_TO_LANG, LANG_NODE_TARGETS, TOKEN_LIMIT, MAX_FALLBACK_LINES, BINARY_EXTS, EmbeddingMethod
+from .git import clone_repo, push_to_repo
 
 Language = get_language
 logger = logging.getLogger(__name__)
 
-MAX_FALLBACK_LINES = 150
-TOKEN_LIMIT = 16_000  # per-chunk token cap
-
-LANG_NODE_TARGETS: Dict[str, Tuple[str, ...]] = {
-    "python": ("function_definition", "class_definition"),
-    "javascript": ("function", "method_definition", "class"),
-    "typescript": ("function", "method_definition", "class"),
-    "java": ("method_declaration", "class_declaration", "interface_declaration"),
-    "go": ("function_declaration", "method_declaration", "type_specifier"),
-    "c": ("function_definition",),
-    "cpp": ("function_definition", "class_specifier", "struct_specifier"),
-    "rust": ("function_item", "struct_item", "enum_item", "mod_item"),
-    "php": ("function_definition", "class_declaration"),
-    "ruby": ("method", "class", "module"),
-    "kotlin": ("function_declaration", "class_declaration", "object_declaration"),
-}
-EXT_TO_LANG = {
-    # Python
-    ".py": "python",
-    ".pyi": "python",
-    # JavaScript
-    ".js": "javascript",
-    ".jsx": "javascript",
-    ".mjs": "javascript",
-    ".cjs": "javascript",
-    ".json": "javascript",
-    # TypeScript
-    ".ts": "typescript",
-    ".tsx": "typescript",
-    # Java
-    ".java": "java",
-    # Go
-    ".go": "go",
-    # C
-    ".c": "c",
-    ".h": "c",
-    # C++
-    ".cpp": "cpp",
-    ".cc": "cpp",
-    ".cxx": "cpp",
-    ".hpp": "cpp",
-    ".hh": "cpp",
-    ".hxx": "cpp",
-    # Rust
-    ".rs": "rust",
-    # PHP
-    ".php": "php",
-    # Ruby
-    ".rb": "ruby",
-    # Kotlin
-    ".kt": "kotlin",
-    ".kts": "kotlin",
-}
-
-# extensions that are almost always binary blobs
-BINARY_EXTS = {
-    ".png",
-    ".jpg",
-    ".jpeg",
-    ".gif",
-    ".bmp",
-    ".svg",
-    ".webp",
-    ".ico",
-    ".tiff",
-    ".mp3",
-    ".wav",
-    ".ogg",
-    ".flac",
-    ".mp4",
-    ".mkv",
-    ".mov",
-    ".avi",
-    ".wmv",
-    ".pdf",
-    ".psd",
-    ".ai",
-    ".eps",
-    ".ttf",
-    ".otf",
-    ".woff",
-    ".woff2",
-    ".zip",
-    ".gz",
-    ".tar",
-    ".7z",
-    ".rar",
-    ".exe",
-    ".msi",
-    ".dll",
-    ".mp4",
-    ".mkv",
-    ".mov",
-    ".avi",
-    ".wmv",
-}
 
 # ─────────── Load grammars (works w/ tree_sitter 0.20 → 0.22) ────────────
 LANGUAGE_CACHE: Dict[str, Language] = {}
@@ -129,9 +33,7 @@ PARSER_CACHE: Dict[str, Parser] = {
 }
 
 
-class EmbeddingMethod(str, Enum):
-    OPENAI = "OpenAIEmbedding"
-    SBERT = "SBERTEmbedding"
+
 
 
 class RepoIndex:
@@ -235,55 +137,6 @@ def _ts(d: Path) -> int:
         return int(parts[2])
     except (IndexError, ValueError):
         return 0
-
-
-def clone_repo(
-    repo_url: str,
-    branch: str = "main",
-    cloned_repo_base_dir: str = str(Path.cwd()),
-) -> Path:
-    """
-    Clone or pull a repository.
-    
-    Args:
-        repo_url: Git HTTPS/SSH URL
-        branch: Branch to clone or update (default: main)
-        cloned_repo_base_dir: Local directory to clone into (default: current working dir)
-        
-    Returns:
-        Path to the cloned repository
-    """
-    repo_name = repo_url.rstrip("/").split("/")[-1].removesuffix(".git")
-    repo_path = os.path.join(cloned_repo_base_dir, repo_name)
-    
-    if not Path(repo_path).exists():
-        logger.info("Cloning %s → %s", repo_url, repo_path)
-        Repo.clone_from(repo_url, repo_path, depth=1, branch=branch)
-    else:
-        logger.info("Pulling latest on %s", repo_name)
-        Repo(repo_path).remotes.origin.pull(branch)
-        
-    return Path(repo_path)
-
-
-def push_to_repo(repo_path: Path) -> None:
-    """
-    Push the .kno folder back to the remote repository.
-    
-    Args:
-        repo_path: Path to the cloned repository
-    """
-    repo = Repo(repo_path)
-    kno_dir = os.path.join(repo_path, ".kno")
-    try:
-        logger.info("Pushing .kno to %s", repo_path)
-        relative_kno = os.path.relpath(str(kno_dir), str(repo_path))
-        repo.git.add(str(relative_kno))
-        repo.index.commit("Add/update .kno embedding database")
-        repo.remote().push()
-    except Exception as e:
-        logger.warning("Failed to push .kno to %s: %s", repo_path, e)
-
 
 def index_repo(
     repo_path: Path,

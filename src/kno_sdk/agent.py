@@ -20,7 +20,7 @@ from langchain.chat_models.base import BaseChatModel
 from langchain_core.tools import Tool
 from langgraph.graph import StateGraph, END
 
-from .embedding import RepoIndex, clone_and_index, EmbeddingMethod, search
+from .embedding import RepoIndex, search
 
 logger = logging.getLogger(__name__)
 TOKEN_LIMIT = 16_000  # per-chunk token cap
