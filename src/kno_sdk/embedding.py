@@ -212,11 +212,18 @@ class SBERTEmbeddings(Embeddings):
 
 
 def _build_directory_digest(
-    repo_path: Path, skip_dirs: set[str], skip_files: set[str]
+    repo_path: Path, skip_dirs: set[str], skip_files: set[str], max_depth: int = 5, max_lines: int = 8000
 ) -> str:
     lines: List[str] = []
     for root, dirs, files in os.walk(repo_path):
         rel_root = Path(root).relative_to(repo_path)
+        depth = len(rel_root.parts)
+
+        # Skip processing if depth exceeds max_depth
+        if depth > max_depth:
+            dirs.clear()  # Don't descend further
+            continue
+
         if any(p in skip_dirs for p in rel_root.parts):
             dirs.clear()
             continue
@@ -229,7 +236,7 @@ def _build_directory_digest(
         lines.append(f"{indent}{dir_display} ( {len(files)} files )")
         for f in files:
             lines.append(f"{indent}    {f}")
-        if sum(len(l) for l in lines) > 4000:  # ≈1 k tokens
+        if sum(len(l) for l in lines) > max_lines:  # ≈1 k tokens
             lines.append("…")
             break
     return "\n".join(lines)
