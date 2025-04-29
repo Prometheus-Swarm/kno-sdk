@@ -9,8 +9,8 @@ load_dotenv()
 # x = clone_and_index("https://github.com/gothinkster/node-express-realworld-example-app", branch="master", embedding=EmbeddingMethod.SBERT, cloned_repo_base_dir="repos",should_push_to_repo=False)
 # print(x)
 
-repo_url = "https://github.com/gothinkster/node-express-realworld-example-app"
-branch = "master"
+repo_url = "https://github.com/Prometheus-Swarm/feature-builder"
+branch = "main"
 system_prompt = f"""
             You are a senior code-analysis agent working on the repository below.
 
@@ -87,12 +87,12 @@ format = """f
 resp = agent_query(
     repo_url=repo_url,
     branch=branch,
-    embedding=EmbeddingMethod.SBERT,
+    embedding=EmbeddingMethod.OPENAI,
     cloned_repo_base_dir="repos",
     llm_system_prompt=system_prompt,
     prompt=prompt,
     MODEL_API_KEY=os.environ.get("ANTHROPIC_API_KEY"),
-    output_format=format
+    output_format=format,
 )
 print(resp)
 

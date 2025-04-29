@@ -262,7 +262,7 @@ def create_agent_graph(
                         "content": (
                             "I couldn’t recognise a tool call. Use `read_file` or `search_code` \n "
                             "Reply either with valid\n"
-                            '```json\n{ "action": "tool", "action_input": … }\n```\n'
+                            '```json\n{ "action": "tool_name", "action_input": "tool_input" }\n```\n'
                             "or finish with **#Final-Answer:**."
                         ),
                     }
@@ -397,6 +397,7 @@ class AgentFactory:
             cfg.embedding_function,
             cloned_repo_base_dir,
             False,
+            False
         )
         llm = self._get_llm(cfg)
         tools = build_tools(index, llm, cfg)
@@ -464,46 +465,50 @@ def agent_query(
         max_tokens=llm_max_tokens,
         cloned_repo_base_dir=cloned_repo_base_dir,
     )
+    
     prompt_suffix = """
-            IMPORTANT RULES:
+    You must strictly follow these rules when responding:
 
-            * If you need more information, respond ONLY by calling a tool (read_file, search_code).
+    🚨 RULES FOR RESPONSES:
 
-            * If you have enough information, respond ONLY with
-            
-            ```
-            #Final-Answer: <your comprehensive answer here>
-            ```
-            
-            * "NEVER mix a tool call and a #Final-Answer: in the same message."
+    1. You may **only do ONE of the following per message**:
+    - Call a single tool.
+    - Respond with a final answer.
 
-            * NEVER include commentary when making a tool call — just the JSON block.
+    2. If you need more information:
+    - Use *only* a single tool call.
+    - Your response must be a pure JSON block (no commentary, no Markdown outside the code block).
+    - Format it like one of the following:
 
-            * Continue gathering information until you are certain you can write a complete #Final-Answer:.
+    ```json
+    {
+        "action": "search_code",
+        "action_input": "<code snippet or query>"
+    }
+    ```
 
-            * Always stay disciplined: single TOOL CALL OR FINAL ANSWER — NEVER BOTH TOGETHER.
-            
-            When you need to call a tool you MUST respond with *only* fenced JSON,
-            like below – no commentary, no Markdown other than the three back-ticks:
-                    
-            1. Use a tool to gather more information by formatting your response as:
-            ```json
-            { "action": "search_code",
-            "action_input": "<CODE SNIPPET>"}
-            
-            OR
-            
-            ```json
-            { "action": "read_file",
-            "action_input": "<FILE_PATH>" } }   
-             
-            When you are done, reply with:
-            
-            ```
-            #Final-Answer: Your comprehensive analysis or solution here.
-            ```
-            IMPORTANT: Do not respond with tool call and #Final-Answer: in one response.
-        """
+    OR
+
+    ```json
+    {
+    "action": "read_file",
+    "action_input": "<file_path>"
+    }
+    ```
+
+    3. If you have all necessary information:
+    If you have all necessary information, reply only with:
+
+    #Final-Answer: <your comprehensive answer or solution>
+    
+    ❌ NEVER mix tool calls and final answers.
+
+    ❌ NEVER include extra explanation or commentary when using a tool.
+
+    ✅ Continue calling tools (one per message) until you are completely ready to give a #Final-Answer.
+
+    Stay disciplined. No tool chaining, no partial answers.
+    """
     system_message = llm_system_prompt.strip() + "\n\n" + prompt_suffix
 
     agent = AgentFactory().create_agent(
