@@ -1,4 +1,5 @@
-from src.kno_sdk import clone_and_index, EmbeddingMethod, agent_query, search
+from pathlib import Path
+from src.kno_sdk import clone_and_index, EmbeddingMethod, agent_query, search, load_index
 
 # from kno_sdk import clone_and_index, search, EmbeddingMethod, agent_query
 import os
@@ -84,11 +85,10 @@ format = """f
     ]
     }}
 """
+
+index = load_index(Path("repos/node-express-realworld-example-app"))
 resp = agent_query(
-    repo_url=repo_url,
-    branch=branch,
-    embedding=EmbeddingMethod.SBERT,
-    cloned_repo_base_dir="repos",
+    repo_index=index,
     llm_system_prompt=system_prompt,
     prompt=prompt,
     MODEL_API_KEY=os.environ.get("ANTHROPIC_API_KEY"),

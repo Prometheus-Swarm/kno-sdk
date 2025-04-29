@@ -1,7 +1,7 @@
 """KNO-SDK — clone, index and search GitHub repos via Chroma embeddings."""
 
 from .agent import search, RepoIndex, EmbeddingMethod, agent_query, LLMProvider
-from .embedding import clone_and_index, clone_repo, index_repo, push_to_repo
+from .embedding import clone_and_index, clone_repo, index_repo, push_to_repo, load_index
 
 __all__ = [
     "clone_and_index",
@@ -12,5 +12,6 @@ __all__ = [
     "RepoIndex",
     "EmbeddingMethod",
     "agent_query",
-    "LLMProvider"
+    "LLMProvider",
+    "load_index"
 ]

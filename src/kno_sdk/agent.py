@@ -34,7 +34,7 @@ class LLMProvider(str, Enum):
 # ──────────────────────────── AGENT FACTORY ──────────────────────────
 @dataclass
 class AgentConfig:
-    repo_url: str
+    repo_path: str
     branch: str = "main"
     llm_provider: str = "anthropic"
     model_name: str = "claude-3-5-haiku-latest"
@@ -74,14 +74,7 @@ def build_tools(index: RepoIndex, llm: LLMProviderBase, cfg: AgentConfig) -> Lis
                 f"Please provide a search query. Repository structure:\n{index.digest}"
             )
         # 1) retrieve top‑k code snippets
-        snippets = search(
-            repo_url=cfg.repo_url,
-            branch=cfg.branch,
-            embedding=EmbeddingMethod.SBERT,
-            cloned_repo_base_dir=cfg.cloned_repo_base_dir,
-            query=query,
-            k=k,
-        )
+        snippets = [d.page_content for d in index.vector_store.similarity_search(query, k=k)]
         context = "\n\n---\n\n".join(snippets)
 
         # 2) build a RAG prompt
@@ -215,9 +208,9 @@ def create_agent_graph(
     # Node 2: Parse action and execute tool if needed
     def execute_tools(state: AgentState) -> AgentState:
         """
-        • Parse the assistant’s most‑recent message for a tool call.
+        • Parse the assistant's most‑recent message for a tool call.
         • Accept either fenced‑JSON *or* the natural‑language pattern
-          “I'll use the <tool> tool with input: …”.
+          "I'll use the <tool> tool with input: …".
         • Execute the tool, append the observation, and advance the loop.
         • If no valid tool call is detected, inject a system nudge so the
           agent retries instead of entering an endless loop.
@@ -260,7 +253,7 @@ def create_agent_graph(
                     {
                         "role": "assistant",
                         "content": (
-                            "I couldn’t recognise a tool call. Use `read_file` or `search_code` \n "
+                            "I couldn't recognise a tool call. Use `read_file` or `search_code` \n "
                             "Reply either with valid\n"
                             '```json\n{ "action": "tool", "action_input": … }\n```\n'
                             "or finish with **#Final-Answer:**."
@@ -273,7 +266,7 @@ def create_agent_graph(
         tool_name = tool_call.get("action")
         tool_input = tool_call.get("action_input")
 
-        # ───── 4. ***Duplicate‑call guard*** – skip if same as last one ─────
+        # ───── 4. ***Duplicate‑call guard*** – skip if same as last one ─────
         if state["intermediate_steps"]:
             prev_action, _ = state["intermediate_steps"][-1]
             if (
@@ -387,17 +380,12 @@ class AgentFactory:
     def create_agent(
         self,
         cfg: AgentConfig,
+        index: RepoIndex,
         cloned_repo_base_dir: str = str(Path.cwd()),
         system_prompt: str = "",
         output_format: str | None = None,
     ):
-        index = clone_and_index(
-            cfg.repo_url,
-            cfg.branch,
-            cfg.embedding_function,
-            cloned_repo_base_dir,
-            False,
-        )
+
         llm = self._get_llm(cfg)
         tools = build_tools(index, llm, cfg)
         agent_graph = create_agent_graph(tools, llm, system_prompt, output_format)
@@ -411,7 +399,7 @@ class AgentFactory:
                 state = {
                     "input": input_str,
                     "repo_info": {
-                        "url": cfg.repo_url,
+                        "url": cfg.repo_path,
                         "branch": cfg.branch,
                         "digest": index.digest,
                     },
@@ -437,10 +425,7 @@ class AgentFactory:
 
 
 def agent_query(
-    repo_url: str,
-    branch: str = "main",
-    embedding: EmbeddingMethod = EmbeddingMethod.SBERT,
-    cloned_repo_base_dir: str = str(Path.cwd()),
+    repo_index: RepoIndex,
     llm_provider: LLMProvider = LLMProvider.ANTHROPIC,
     llm_model: str = "claude-3-5-haiku-latest",
     llm_temperature: float = 0.0,
@@ -455,14 +440,14 @@ def agent_query(
     elif LLMProvider.OPENAI:
         os.environ["OPENAI_API_KEY"] = MODEL_API_KEY
     cfg = AgentConfig(
-        repo_url=repo_url,
-        branch=branch,
+        repo_path=str(repo_index.path),  # Use full path to local repository
+        branch="main",  # Default branch
         llm_provider=llm_provider.value,
         model_name=llm_model,
-        embedding_function=embedding.value,
+        embedding_function="SBERTEmbedding",  # Default to SBERT
         temperature=llm_temperature,
         max_tokens=llm_max_tokens,
-        cloned_repo_base_dir=cloned_repo_base_dir,
+        cloned_repo_base_dir=str(repo_index.path.parent),  # Use parent directory of index
     )
     prompt_suffix = """
             IMPORTANT RULES:
@@ -508,7 +493,7 @@ def agent_query(
 
     agent = AgentFactory().create_agent(
         cfg,
-        cloned_repo_base_dir=cloned_repo_base_dir,
+        index=repo_index,
         system_prompt=system_message,
         output_format=output_format,
     )
