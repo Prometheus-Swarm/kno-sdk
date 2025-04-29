@@ -467,3 +467,64 @@ def search(
         )
 
     return [d.page_content for d in chroma_vs.similarity_search(query, k=k)]
+
+
+def load_index(
+    repo_path: Path,
+    embedding: Union[EmbeddingMethod, str] = EmbeddingMethod.SBERT,
+) -> RepoIndex:
+    """
+    Load an existing index from a directory containing a .kno folder.
+    
+    Args:
+        repo_path: Path to the repository directory containing .kno folder
+        embedding: EmbeddingMethod.OPENAI or EmbeddingMethod.SBERT, or their string values
+        
+    Returns:
+        RepoIndex object with the vector store and repository information
+        
+    Raises:
+        FileNotFoundError: If .kno directory doesn't exist
+        ValueError: If no embedding folders found for the specified embedding method
+    """
+    # Handle string input for embedding
+    if isinstance(embedding, str):
+        try:
+            embedding = EmbeddingMethod(embedding)
+        except ValueError:
+            raise ValueError(f"Invalid embedding method: {embedding}. Must be one of {[e.value for e in EmbeddingMethod]}")
+
+    # Locate .kno and filter for this embedding method
+    kno_root = Path(repo_path) / ".kno"
+    if not kno_root.exists():
+        raise FileNotFoundError(
+            f"No .kno directory in {repo_path}. Run clone_and_index first."
+        )
+
+    prefix = f"embedding_{embedding.value}_"
+    cand_dirs = [
+        d for d in kno_root.iterdir() if d.is_dir() and d.name.startswith(prefix)
+    ]
+    if not cand_dirs:
+        raise ValueError(
+            f"No embedding folders for `{embedding.value}` found in {kno_root}"
+        )
+
+    latest_dir = max(cand_dirs, key=_ts)
+    embed_fn = (
+        OpenAIEmbeddings()
+        if embedding.value == "OpenAIEmbedding"
+        else SBERTEmbeddings()
+    )
+    
+    vs = Chroma(
+        collection_name=repo_path.name,
+        embedding_function=embed_fn,
+        persist_directory=str(latest_dir),
+    )
+    
+    skip_dirs = {".git", "node_modules", "build", "dist", "target", ".vscode", ".kno"}
+    skip_files = {"package-lock.json", "yarn.lock", ".prettierignore"}
+    digest = _build_directory_digest(repo_path, skip_dirs, skip_files)
+    
+    return RepoIndex(vector_store=vs, digest=digest, path=repo_path)

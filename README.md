@@ -10,7 +10,7 @@ A Python library for cloning, indexing, and semantically searching Git repositor
 - **Extract semantic code chunks** via Tree-Sitter grammars (functions, classes, methods, etc.)  
 - **Fallback to line-based chunking** for unsupported languages or large files  
 - **Embed code or text** with your choice of:
-  - OpenAI’s `text-embedding-ada-002` via **OpenAIEmbeddings**  
+  - OpenAI's `text-embedding-ada-002` via **OpenAIEmbeddings**  
   - Local SBERT model (e.g. `microsoft/graphcodebert-base`) via **SBERTEmbeddings**  
 - **Persist vector store** in a `.kno/` folder using Chroma  
 - **Auto-commit & push** the embedding database back to your repo  
@@ -56,11 +56,17 @@ for i, chunk in enumerate(results, 1):
 # 3. Autonomous Code-Analysis Agent
 from kno_sdk import agent_query, EmbeddingMethod, LLMProvider
 
-result = agent_query(
+# First create a repo index
+repo_index = clone_and_index(
     repo_url="https://github.com/WebGoat/WebGoat",
     branch="main",
     embedding=EmbeddingMethod.SBERT,
-    cloned_repo_base_dir="repos",
+    cloned_repo_base_dir="repos"
+)
+
+# Then use the index with agent_query
+result = agent_query(
+    repo_index=repo_index,
     llm_provider=LLMProvider.ANTHROPIC,
     llm_model="claude-3-haiku-20240307",
     llm_temperature=0.0,
@@ -165,7 +171,7 @@ def agent_query(
 *   **MODEL\_API\_KEY** — sets OPENAI\_API\_KEY or ANTHROPIC\_API\_KEY
     
 
-Returns the agent’s **Final Answer** as a string.
+Returns the agent's **Final Answer** as a string.
 
 ### EmbeddingMethod
 
@@ -176,14 +182,14 @@ class EmbeddingMethod(str, Enum):
     SBERT  = "SBERTEmbeddings"
 ```
 
-Choose between OpenAI’s hosted embeddings or a local SBERT model.
+Choose between OpenAI's hosted embeddings or a local SBERT model.
 
 🔍 How It Works
 ---------------
 
 1.  **Clone or Pull**Uses GitPython to clone depth-1 or pull the latest changes.
     
-2.  **Directory Snapshot**Builds a small “digest” of files/folders (up to ~1 K tokens).
+2.  **Directory Snapshot**Builds a small "digest" of files/folders (up to ~1 K tokens).
     
 3.  **Chunk Extraction**
     
@@ -215,7 +221,7 @@ Choose between OpenAI’s hosted embeddings or a local SBERT model.
     
 *   Iterative LLM planning & execution
     
-*   Stops on “Final Answer:” or max iterations
+*   Stops on "Final Answer:" or max iterations
   
 ⚙️ Configuration
 ----------------
