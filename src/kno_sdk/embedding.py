@@ -193,7 +193,7 @@ def _build_directory_digest(
     skip_dirs: set[str],
     skip_files: set[str],
     max_depth: int = 5,
-    max_chars: int = 8000
+    max_chars: int = 10000
 ) -> dict[str, Any]:
     file_list: List[str] = []
     truncated = False

@@ -79,7 +79,7 @@ def build_tools(index: RepoIndex, llm: LLMProviderBase, cfg: AgentConfig) -> Lis
             matching_files = [f for f in index.digest['files'] if fnmatch.fnmatch(f, query)]
             if not matching_files:
                 return f"No files match the pattern '{query}'"
-            return f"Files matching '{query}':\n" + "\n".join(matching_files[:k])
+            return f"Files matching '{query}':\n" + "\n".join(matching_files)
 
         # 1) retrieve top‑k code snippets
         snippets = search(
