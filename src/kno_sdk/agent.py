@@ -398,13 +398,14 @@ class AgentFactory:
         cloned_repo_base_dir: str = str(Path.cwd()),
         system_prompt: str = "",
         output_format: str | None = None,
+        should_reindex: bool = False
     ):
         index = clone_and_index(
             cfg.repo_url,
             cfg.branch,
             cfg.embedding_function,
             cloned_repo_base_dir,
-            False,
+            should_reindex,
             False
         )
         llm = self._get_llm(cfg)
@@ -458,6 +459,7 @@ def agent_query(
     prompt: str = "",
     MODEL_API_KEY: str = "",
     output_format: str | None = None,
+    should_reindex: bool = False
 ):
     if LLMProvider.ANTHROPIC:
         os.environ["ANTHROPIC_API_KEY"] = MODEL_API_KEY
@@ -524,6 +526,7 @@ def agent_query(
         cloned_repo_base_dir=cloned_repo_base_dir,
         system_prompt=system_message,
         output_format=output_format,
+        should_reindex = should_reindex
     )
     result = agent.run(prompt)
     return result

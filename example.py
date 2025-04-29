@@ -93,6 +93,7 @@ resp = agent_query(
     prompt=prompt,
     MODEL_API_KEY=os.environ.get("ANTHROPIC_API_KEY"),
     output_format=format,
+    should_reindex = True
 )
 print(resp)
 
