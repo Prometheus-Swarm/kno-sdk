@@ -443,7 +443,8 @@ def agent_query(
     prompt: str = "",
     MODEL_API_KEY: str = "",
     output_format: str | None = None,
-    should_reindex: bool = False
+    should_reindex: bool = False,
+    embedding: str = "SBERTEmbedding",
 ):
     if LLMProvider.ANTHROPIC:
         os.environ["ANTHROPIC_API_KEY"] = MODEL_API_KEY
@@ -454,7 +455,7 @@ def agent_query(
         branch="main",  # Default branch
         llm_provider=llm_provider.value,
         model_name=llm_model,
-        embedding_function="SBERTEmbedding",  # Default to SBERT
+        embedding_function=embedding,  # Default to SBERT
         temperature=llm_temperature,
         max_tokens=llm_max_tokens,
         cloned_repo_base_dir=str(repo_index.path.parent),  # Use parent directory of index

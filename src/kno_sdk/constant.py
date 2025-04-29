@@ -4,6 +4,7 @@ from enum import Enum
 class EmbeddingMethod(str, Enum):
     OPENAI = "OpenAIEmbedding"
     SBERT = "SBERTEmbedding"
+    JINAAI = "JinaAIEmbedding"    
 
 MAX_FALLBACK_LINES = 150
 TOKEN_LIMIT = 16_000  # per-chunk token cap

@@ -89,6 +89,17 @@ class SBERTEmbeddings(Embeddings):
     def embed_query(self, text: str) -> List[float]:
         return self.model.encode([text])[0].tolist()
 
+class JINAAIEmbeddings(Embeddings):
+    def __init__(self, model_name: str = "jinaai/jina-embeddings-v2-base-code"):
+        self.model = SentenceTransformer(model_name, trust_remote_code=True)
+        self.model.max_seq_length = 768
+
+    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+        return self.model.encode(texts, show_progress_bar=True).tolist()
+
+    def embed_query(self, text: str) -> List[float]:
+        return self.model.encode([text])[0].tolist()
+
 
 def _build_directory_digest(
     repo_path: Path,
@@ -166,11 +177,14 @@ def index_repo(
     digest = _build_directory_digest(repo_path, skip_dirs, skip_files)
 
     # 2. choose embedding
-    embed_fn = (
-        OpenAIEmbeddings()
-        if embedding.value == "OpenAIEmbedding"
-        else SBERTEmbeddings()
-    )
+        
+    if embedding.value == "OpenAIEmbedding":
+        embed_fn = OpenAIEmbeddings()
+    elif embedding.value == "SBERTEmbedding":
+        embed_fn = SBERTEmbeddings()
+    else:
+        embed_fn = JINAAIEmbeddings()
+    
     
     commit = repo.head.commit.hexsha[:7]
     time_ms = int(time.time() * 1000)
