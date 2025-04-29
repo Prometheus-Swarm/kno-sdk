@@ -7,11 +7,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 # Forking
-# x = clone_and_index("https://github.com/gothinkster/node-express-realworld-example-app", branch="master", embedding=EmbeddingMethod.SBERT, cloned_repo_base_dir="repos",should_push_to_repo=False)
+index = clone_and_index("https://github.com/Prometheus-Swarm/feature-builder", branch="main", embedding=EmbeddingMethod.SBERT, cloned_repo_base_dir="repos",should_push_to_repo=False)
 # print(x)
 
-repo_url = "https://github.com/gothinkster/node-express-realworld-example-app"
-branch = "master"
+repo_url = "https://github.com/Prometheus-Swarm/feature-builder"
+branch = "main"
 system_prompt = f"""
             You are a senior code-analysis agent working on the repository below.
 
@@ -86,7 +86,8 @@ format = """f
     }}
 """
 
-index = load_index(Path("repos/node-express-realworld-example-app"))
+print("index path", index.path)
+# index = load_index(Path("repos/node-express-realworld-example-app"))
 resp = agent_query(
     repo_index=index,
     llm_system_prompt=system_prompt,
