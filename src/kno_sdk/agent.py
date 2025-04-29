@@ -4,6 +4,7 @@ import os
 import time
 import json
 import re
+import fnmatch
 
 
 from pathlib import Path
@@ -73,6 +74,13 @@ def build_tools(index: RepoIndex, llm: LLMProviderBase, cfg: AgentConfig) -> Lis
             return (
                 f"Please provide a search query. Repository structure:\n{index.digest}"
             )
+        # If user gives a glob-style file pattern like "*.py"
+        if any(char in query for char in ["*", "?", "[", "]"]):
+            matching_files = [f for f in index.digest['files'] if fnmatch.fnmatch(f, query)]
+            if not matching_files:
+                return f"No files match the pattern '{query}'"
+            return f"Files matching '{query}':\n" + "\n".join(matching_files)
+
         # 1) retrieve top‑k code snippets
         snippets = [d.page_content for d in index.vector_store.similarity_search(query, k=k)]
         context = "\n\n---\n\n".join(snippets)
@@ -255,7 +263,7 @@ def create_agent_graph(
                         "content": (
                             "I couldn't recognise a tool call. Use `read_file` or `search_code` \n "
                             "Reply either with valid\n"
-                            '```json\n{ "action": "tool", "action_input": … }\n```\n'
+                            '```json\n{ "action": "tool_name", "action_input": "tool_input" }\n```\n'
                             "or finish with **#Final-Answer:**."
                         ),
                     }
@@ -384,6 +392,7 @@ class AgentFactory:
         cloned_repo_base_dir: str = str(Path.cwd()),
         system_prompt: str = "",
         output_format: str | None = None,
+        should_reindex: bool = False
     ):
 
         llm = self._get_llm(cfg)
@@ -434,6 +443,7 @@ def agent_query(
     prompt: str = "",
     MODEL_API_KEY: str = "",
     output_format: str | None = None,
+    should_reindex: bool = False
 ):
     if LLMProvider.ANTHROPIC:
         os.environ["ANTHROPIC_API_KEY"] = MODEL_API_KEY
@@ -449,46 +459,50 @@ def agent_query(
         max_tokens=llm_max_tokens,
         cloned_repo_base_dir=str(repo_index.path.parent),  # Use parent directory of index
     )
+    
     prompt_suffix = """
-            IMPORTANT RULES:
+    You must strictly follow these rules when responding:
 
-            * If you need more information, respond ONLY by calling a tool (read_file, search_code).
+    🚨 RULES FOR RESPONSES:
 
-            * If you have enough information, respond ONLY with
-            
-            ```
-            #Final-Answer: <your comprehensive answer here>
-            ```
-            
-            * "NEVER mix a tool call and a #Final-Answer: in the same message."
+    1. You may **only do ONE of the following per message**:
+    - Call a single tool.
+    - Respond with a final answer.
 
-            * NEVER include commentary when making a tool call — just the JSON block.
+    2. If you need more information:
+    - Use *only* a single tool call.
+    - Your response must be a pure JSON block (no commentary, no Markdown outside the code block).
+    - Format it like one of the following:
 
-            * Continue gathering information until you are certain you can write a complete #Final-Answer:.
+    ```json
+    {
+        "action": "search_code",
+        "action_input": "<code snippet or query>"
+    }
+    ```
 
-            * Always stay disciplined: single TOOL CALL OR FINAL ANSWER — NEVER BOTH TOGETHER.
-            
-            When you need to call a tool you MUST respond with *only* fenced JSON,
-            like below – no commentary, no Markdown other than the three back-ticks:
-                    
-            1. Use a tool to gather more information by formatting your response as:
-            ```json
-            { "action": "search_code",
-            "action_input": "<CODE SNIPPET>"}
-            
-            OR
-            
-            ```json
-            { "action": "read_file",
-            "action_input": "<FILE_PATH>" } }   
-             
-            When you are done, reply with:
-            
-            ```
-            #Final-Answer: Your comprehensive analysis or solution here.
-            ```
-            IMPORTANT: Do not respond with tool call and #Final-Answer: in one response.
-        """
+    OR
+
+    ```json
+    {
+    "action": "read_file",
+    "action_input": "<file_path>"
+    }
+    ```
+
+    3. If you have all necessary information:
+    If you have all necessary information, reply only with:
+
+    #Final-Answer: <your comprehensive answer or solution>
+    
+    ❌ NEVER mix tool calls and final answers.
+
+    ❌ NEVER include extra explanation or commentary when using a tool.
+
+    ✅ Continue calling tools (one per message) until you are completely ready to give a #Final-Answer.
+
+    Stay disciplined. No tool chaining, no partial answers.
+    """
     system_message = llm_system_prompt.strip() + "\n\n" + prompt_suffix
 
     agent = AgentFactory().create_agent(
@@ -496,6 +510,7 @@ def agent_query(
         index=repo_index,
         system_prompt=system_message,
         output_format=output_format,
+        should_reindex=should_reindex
     )
     result = agent.run(prompt)
     return result
