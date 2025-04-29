@@ -4,6 +4,7 @@ import os
 import time
 import json
 import re
+import fnmatch
 
 
 from pathlib import Path
@@ -73,6 +74,13 @@ def build_tools(index: RepoIndex, llm: LLMProviderBase, cfg: AgentConfig) -> Lis
             return (
                 f"Please provide a search query. Repository structure:\n{index.digest}"
             )
+        # If user gives a glob-style file pattern like "*.py"
+        if any(char in query for char in ["*", "?", "[", "]"]):
+            matching_files = [f for f in index.digest['files'] if fnmatch.fnmatch(f, query)]
+            if not matching_files:
+                return f"No files match the pattern '{query}'"
+            return f"Files matching '{query}':\n" + "\n".join(matching_files[:k])
+
         # 1) retrieve top‑k code snippets
         snippets = search(
             repo_url=cfg.repo_url,

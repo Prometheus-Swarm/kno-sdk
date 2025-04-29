@@ -137,35 +137,12 @@ class EmbeddingMethod(str, Enum):
 class RepoIndex:
     path: Path
     vector_store: Chroma
-    digest: str
+    digest: dict[str, Any]
 
     def __init__(self, vector_store: Chroma, digest: str, path: Path = Path.cwd()):
         self.path = path
         self.vector_store = vector_store
         self.digest = digest
-
-    def _build_directory_digest(
-        repo_path: Path, skip_dirs: set[str], skip_files: set[str]
-    ) -> str:
-        lines: List[str] = []
-        for root, dirs, files in os.walk(repo_path):
-            rel_root = Path(root).relative_to(repo_path)
-            if any(p in skip_dirs for p in rel_root.parts):
-                dirs.clear()
-                continue
-            files = [f for f in files if f not in skip_files]
-            if not files:
-                continue
-            depth = len(rel_root.parts)
-            indent = "    " * depth
-            dir_display = "." if rel_root == Path(".") else f"{rel_root}/"
-            lines.append(f"{indent}{dir_display} ( {len(files)} files )")
-            for f in files:
-                lines.append(f"{indent}    {f}")
-            if sum(len(l) for l in lines) > 4000:  # ≈1 k tokens
-                lines.append("…")
-                break
-        return "\n".join(lines)
 
 
 def _extract_semantic_chunks(path: Path, text: str) -> List[str]:
@@ -212,34 +189,43 @@ class SBERTEmbeddings(Embeddings):
 
 
 def _build_directory_digest(
-    repo_path: Path, skip_dirs: set[str], skip_files: set[str], max_depth: int = 5, max_lines: int = 8000
-) -> str:
-    lines: List[str] = []
+    repo_path: Path,
+    skip_dirs: set[str],
+    skip_files: set[str],
+    max_depth: int = 5,
+    max_chars: int = 8000
+) -> dict[str, Any]:
+    file_list: List[str] = []
+    truncated = False
+
     for root, dirs, files in os.walk(repo_path):
         rel_root = Path(root).relative_to(repo_path)
         depth = len(rel_root.parts)
 
-        # Skip processing if depth exceeds max_depth
-        if depth > max_depth:
-            dirs.clear()  # Don't descend further
-            continue
-
-        if any(p in skip_dirs for p in rel_root.parts):
+        if depth > max_depth or any(part in skip_dirs for part in rel_root.parts):
             dirs.clear()
             continue
+
         files = [f for f in files if f not in skip_files]
-        if not files:
-            continue
-        depth = len(rel_root.parts)
-        indent = "    " * depth
-        dir_display = "." if rel_root == Path(".") else f"{rel_root}/"
-        lines.append(f"{indent}{dir_display} ( {len(files)} files )")
-        for f in files:
-            lines.append(f"{indent}    {f}")
-        if sum(len(l) for l in lines) > max_lines:  # ≈1 k tokens
-            lines.append("…")
+        for file_name in files:
+            full_path = str(rel_root / file_name) if rel_root != Path(".") else file_name
+            file_list.append(full_path)
+
+        if sum(len(f) + 4 for f in file_list) > max_chars:
+            truncated = True
+            file_list.append("...")
             break
-    return "\n".join(lines)
+
+    output = {
+        "summary": {
+            "total_files": len(file_list) - (1 if truncated else 0),
+            "truncated": truncated
+        },
+        "files": file_list
+    }
+
+    # Pretty-print JSON inside Python string with newlines and indentation
+    return output
 
 
 # 3) parse out the timestamp and pick the max
