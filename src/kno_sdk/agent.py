@@ -416,7 +416,7 @@ class AgentFactory:
                 }
                 while True:
                     state = self.graph.invoke(
-                        state, {"recursion_limit": MAX_ITERATIONS * 2}
+                        state, {"recursion_limit": MAX_ITERATIONS}
                     )  # one step
                     last = state["messages"][-1]["content"] if state["messages"] else ""
                     if (
