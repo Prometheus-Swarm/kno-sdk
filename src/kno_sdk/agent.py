@@ -389,10 +389,8 @@ class AgentFactory:
         self,
         cfg: AgentConfig,
         index: RepoIndex,
-        cloned_repo_base_dir: str = str(Path.cwd()),
         system_prompt: str = "",
         output_format: str | None = None,
-        should_reindex: bool = False
     ):
 
         llm = self._get_llm(cfg)
@@ -443,7 +441,6 @@ def agent_query(
     prompt: str = "",
     MODEL_API_KEY: str = "",
     output_format: str | None = None,
-    should_reindex: bool = False,
     embedding: str = "SBERTEmbedding",
 ):
     if LLMProvider.ANTHROPIC:
@@ -473,6 +470,7 @@ def agent_query(
     2. If you need more information:
     - Use *only* a single tool call.
     - Your response must be a pure JSON block (no commentary, no Markdown outside the code block).
+    - You have 2 tools available: i.e. Search code: `search_code` and Read file: `read_file`.
     - Format it like one of the following:
 
     ```json
@@ -504,14 +502,16 @@ def agent_query(
 
     Stay disciplined. No tool chaining, no partial answers.
     """
-    system_message = llm_system_prompt.strip() + "\n\n" + prompt_suffix
-
+    system_message = (
+        f"{llm_system_prompt.strip()}\n\n"
+        f"Repository digest:\n{repo_index.digest}\n\n"
+        f"{prompt_suffix}"
+    )
     agent = AgentFactory().create_agent(
         cfg,
         index=repo_index,
         system_prompt=system_message,
         output_format=output_format,
-        should_reindex=should_reindex
     )
     result = agent.run(prompt)
     return result
