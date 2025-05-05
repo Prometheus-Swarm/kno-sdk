@@ -284,7 +284,7 @@ def create_agent_graph(
             ):
                 warn_msg = (
                     f"You already ran `{tool_name}` with that exact input. "
-                    "I'll skip that and you can choose another action or finish with **#Final-Answer:**."
+                    "I'll skip that and you can choose another action or different input or finish with **#Final-Answer:**."
                 )
                 # Append a system message (not a new tool step), and do not bump iterations
                 return {
