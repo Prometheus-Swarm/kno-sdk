@@ -172,7 +172,7 @@ def index_repo(
     repo = Repo(repo_path)
     repo_name = repo_path.name
     kno_dir = os.path.join(repo_path, ".kno")
-    skip_dirs = {".git", "node_modules", "build", "dist", "target", ".vscode", ".kno"}
+    skip_dirs = {".git", "node_modules", "build", "dist", "target", ".vscode", ".kno",".github"}
     skip_files = {"package-lock.json", "yarn.lock", ".prettierignore"}
     digest = _build_directory_digest(repo_path, skip_dirs, skip_files)
 
@@ -206,7 +206,12 @@ def index_repo(
                 continue
             if fp.stat().st_size > 2_000_000 or fp.suffix.lower() in BINARY_EXTS:
                 continue
-            content = fp.read_text(errors="ignore")
+            content = ""
+            try:
+                content = fp.read_text(errors="ignore")
+            except Exception as e:
+                print("Handled", e)
+                continue
             chunks = _extract_semantic_chunks(fp, content) or _fallback_line_chunks(
                 fp, content
             )

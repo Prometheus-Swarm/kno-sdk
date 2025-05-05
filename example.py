@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 # Forking
-index = clone_and_index("https://github.com/Prometheus-Swarm/feature-builder", branch="main", embedding=EmbeddingMethod.JINAAI, cloned_repo_base_dir="repos",should_push_to_repo=False)
+index = clone_and_index("https://github.com/Prometheus-Swarm/feature-builder", branch="main", embedding=EmbeddingMethod.SBERT, cloned_repo_base_dir="repos",should_push_to_repo=False)
 # print(x)
 
 repo_url = "https://github.com/Prometheus-Swarm/feature-builder"
@@ -94,7 +94,7 @@ resp = agent_query(
     prompt=prompt,
     MODEL_API_KEY=os.environ.get("ANTHROPIC_API_KEY"),
     output_format=format,
-    embedding=EmbeddingMethod.JINAAI,
+    embedding=EmbeddingMethod.SBERT,
 )
 print(resp)
 
