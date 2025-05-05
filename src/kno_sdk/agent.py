@@ -504,9 +504,10 @@ def agent_query(
     """
     system_message = (
         f"{llm_system_prompt.strip()}\n\n"
-        f"Repository digest:\n{repo_index.digest}\n\n"
+        f"\n\nRepository digest:\n{repo_index.digest}\n\n"
         f"{prompt_suffix}"
     )
+    print("NEW VERSION")
     agent = AgentFactory().create_agent(
         cfg,
         index=repo_index,

@@ -1,27 +1,107 @@
 from typing import Dict, Tuple
 from enum import Enum
 
+
 class EmbeddingMethod(str, Enum):
     OPENAI = "OpenAIEmbedding"
     SBERT = "SBERTEmbedding"
-    JINAAI = "JinaAIEmbedding"    
+    JINAAI = "JinaAIEmbedding"
+
 
 MAX_FALLBACK_LINES = 150
 TOKEN_LIMIT = 16_000  # per-chunk token cap
 
 LANG_NODE_TARGETS: Dict[str, Tuple[str, ...]] = {
-    "python": ("function_definition", "class_definition"),
-    "javascript": ("function", "method_definition", "class"),
-    "typescript": ("function", "method_definition", "class"),
-    "java": ("method_declaration", "class_declaration", "interface_declaration"),
-    "go": ("function_declaration", "method_declaration", "type_specifier"),
-    "c": ("function_definition",),
-    "cpp": ("function_definition", "class_specifier", "struct_specifier"),
-    "rust": ("function_item", "struct_item", "enum_item", "mod_item"),
-    "php": ("function_definition", "class_declaration"),
-    "ruby": ("method", "class", "module"),
-    "kotlin": ("function_declaration", "class_declaration", "object_declaration"),
+    # Python
+    "python": (
+        "function_definition",
+        "class_definition",
+    ),
+    # JavaScript
+    "javascript": (
+        "function_declaration",
+        "function_expression",
+        "arrow_function",
+        "method_definition",
+        "class_declaration",
+    ),
+    # TypeScript
+    "typescript": (
+        "function_declaration",
+        "function_signature",
+        "arrow_function",
+        "method_definition",
+        "class_declaration",
+        "interface_declaration",
+        "type_alias_declaration",
+    ),
+    # Java
+    "java": (
+        "method_declaration",
+        "constructor_declaration",
+        "class_declaration",
+        "interface_declaration",
+        "enum_declaration",
+    ),
+    # Go
+    "go": (
+        "function_declaration",
+        "method_declaration",
+        "type_declaration",
+    ),
+    # C
+    "c": (
+        "function_definition",
+        "struct_specifier",
+        "union_specifier",
+        "enum_specifier",
+    ),
+    # C++
+    "cpp": (
+        "function_definition",
+        "class_specifier",
+        "struct_specifier",
+        "namespace_definition",
+        "template_declaration",
+    ),
+    # Rust
+    "rust": (
+        "function_item",
+        "struct_item",
+        "enum_item",
+        "impl_item",
+        "mod_item",
+        "trait_item",
+    ),
+    # PHP
+    "php": (
+        "function_definition",
+        "method_declaration",
+        "class_declaration",
+        "interface_declaration",
+        "trait_declaration",
+    ),
+    # Ruby
+    "ruby": (
+        "method",
+        "singleton_method",
+        "class",
+        "module",
+    ),
+    # Kotlin
+    "kotlin": (
+        "function_declaration",
+        "class_declaration",
+        "object_declaration",
+        "interface_declaration",
+    ),
+    "html": (
+        "element", 
+        "script_element", 
+        "style_element"
+    ),
 }
+
 EXT_TO_LANG = {
     # Python
     ".py": "python",

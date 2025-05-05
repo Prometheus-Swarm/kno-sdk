@@ -1,17 +1,18 @@
 from pathlib import Path
-from src.kno_sdk import clone_and_index, EmbeddingMethod, agent_query, search, load_index
-
+from src.kno_sdk import clone_and_index, EmbeddingMethod, agent_query, search, load_index, index_repo
 # from kno_sdk import clone_and_index, search, EmbeddingMethod, agent_query
 import os
 from dotenv import load_dotenv
 
 load_dotenv()
+
+
+repo_url = "https://github.com/SyedGhazanferAnwar/StreamRoller"
+branch = "master"
 # Forking
-index = clone_and_index("https://github.com/Prometheus-Swarm/feature-builder", branch="main", embedding=EmbeddingMethod.SBERT, cloned_repo_base_dir="repos",should_push_to_repo=False)
+# index = clone_and_index(repo_url, branch=branch, embedding=EmbeddingMethod.SBERT, cloned_repo_base_dir="repos",should_push_to_repo=False)
 # print(x)
 
-repo_url = "https://github.com/Prometheus-Swarm/feature-builder"
-branch = "main"
 system_prompt = f"""
             You are a senior code-analysis agent working on the repository below.
 
@@ -86,19 +87,32 @@ format = """f
     }}
 """
 
-print("index path", index.path)
+# print("index path", index.path)
 # index = load_index(Path("repos/node-express-realworld-example-app"))
-resp = agent_query(
-    repo_index=index,
-    llm_system_prompt=system_prompt,
-    prompt=prompt,
-    MODEL_API_KEY=os.environ.get("ANTHROPIC_API_KEY"),
-    output_format=format,
-    embedding=EmbeddingMethod.SBERT,
-)
-print(resp)
+# resp = agent_query(
+#     repo_index=index,
+#     llm_system_prompt=system_prompt,
+#     prompt=prompt,
+#     MODEL_API_KEY=os.environ.get("ANTHROPIC_API_KEY"),
+#     output_format=format,
+#     embedding=EmbeddingMethod.SBERT,
+# )
+# print(resp)
 
-# y = search("https://github.com/SyedGhazanferAnwar/NestJs-MovieApp", branch="master", embedding=EmbeddingMethod.SBERT, cloned_repo_base_dir="repos",query="NEST")
+
+# index = load_index(Path("repos/StreamRoller"))
+z = index_repo(Path("repos/StreamRoller"), EmbeddingMethod.SBERT)
+# resp = agent_query(
+#     repo_index=index,
+#     llm_system_prompt=system_prompt,
+#     prompt=prompt,
+#     MODEL_API_KEY=os.environ.get("ANTHROPIC_API_KEY"),
+#     output_format=format,
+#     embedding=EmbeddingMethod.SBERT,
+# )
+# print(resp)
+# y = search(repo_url, branch=branch, embedding=EmbeddingMethod.SBERT, cloned_repo_base_dir="repos",query="socket.io")
+# print(y)
 # print(y)
 
 # Search coming empty everything else ready
