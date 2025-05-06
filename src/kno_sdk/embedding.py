@@ -58,9 +58,18 @@ def _extract_semantic_chunks(path: Path, text: str) -> List[str]:
 
     def walk(node):
         if node.type in targets:
-            code = text[node.start_byte : node.end_byte]
-            header = f"// {path.name}:{node.start_point[0]+1}-{node.end_point[0]+1}\n"
-            chunks.append(header + code)
+            code = text[node.start_byte: node.end_byte]
+            lines = code.splitlines()
+            total = len(lines)
+            base_line = node.start_point[0] + 1   # 1‑based line numbers
+
+            # slice into ≤ max_lines pieces
+            for i in range(0, total, MAX_FALLBACK_LINES):
+                seg = lines[i:i + MAX_FALLBACK_LINES]
+                seg_start = base_line + i
+                seg_end = seg_start + len(seg) - 1
+                header = f"// {path.name}:{seg_start}-{seg_end}\n"
+                chunks.append(header + "\n".join(seg))
             return
         for child in node.children:
             walk(child)

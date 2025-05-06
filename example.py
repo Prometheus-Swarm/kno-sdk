@@ -111,9 +111,8 @@ z = index_repo(Path("repos/StreamRoller"), EmbeddingMethod.SBERT)
 #     embedding=EmbeddingMethod.SBERT,
 # )
 # print(resp)
-# y = search(repo_url, branch=branch, embedding=EmbeddingMethod.SBERT, cloned_repo_base_dir="repos",query="socket.io")
-# print(y)
-# print(y)
+y = search(repo_url, branch=branch, embedding=EmbeddingMethod.SBERT, cloned_repo_base_dir="repos",query="socket.io")
+print(y)
 
 # Search coming empty everything else ready
 
