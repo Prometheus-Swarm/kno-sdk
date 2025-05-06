@@ -215,6 +215,8 @@ def index_repo(
                 continue
             if fp.stat().st_size > 2_000_000 or fp.suffix.lower() in BINARY_EXTS:
                 continue
+            if not fp.is_file():
+                continue
             content = ""
             try:
                 content = fp.read_text(errors="ignore")
