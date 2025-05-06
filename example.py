@@ -7,10 +7,10 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-repo_url = "https://github.com/SyedGhazanferAnwar/StreamRoller"
+repo_url = "https://github.com/SyedGhazanferAnwar/Google-Drive-Search-Engine"
 branch = "master"
 # Forking
-# index = clone_and_index(repo_url, branch=branch, embedding=EmbeddingMethod.SBERT, cloned_repo_base_dir="repos",should_push_to_repo=False)
+index = clone_and_index(repo_url, branch=branch, embedding=EmbeddingMethod.SBERT, cloned_repo_base_dir="repos",should_push_to_repo=False)
 # print(x)
 
 system_prompt = f"""
@@ -101,18 +101,19 @@ format = """f
 
 
 # index = load_index(Path("repos/StreamRoller"))
-z = index_repo(Path("repos/StreamRoller"), EmbeddingMethod.SBERT)
-# resp = agent_query(
-#     repo_index=index,
-#     llm_system_prompt=system_prompt,
-#     prompt=prompt,
-#     MODEL_API_KEY=os.environ.get("ANTHROPIC_API_KEY"),
-#     output_format=format,
-#     embedding=EmbeddingMethod.SBERT,
-# )
+# z = index_repo(Path("repos/StreamRoller"), EmbeddingMethod.SBERT)
+resp = agent_query(
+    repo_index=index,
+    llm_system_prompt=system_prompt,
+    prompt=prompt,
+    MODEL_API_KEY=os.environ.get("ANTHROPIC_API_KEY"),
+    output_format=format,
+    embedding=EmbeddingMethod.SBERT,
+    max_iterations=60
+)
 # print(resp)
-y = search(repo_url, branch=branch, embedding=EmbeddingMethod.SBERT, cloned_repo_base_dir="repos",query="socket.io")
-print(y)
+# y = search(repo_url, branch=branch, embedding=EmbeddingMethod.SBERT, cloned_repo_base_dir="repos",query="socket.io")
+# print(y)
 
 # Search coming empty everything else ready
 

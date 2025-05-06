@@ -43,6 +43,8 @@ class AgentConfig:
     embedding_function: str = "SBERTEmbedding"
     max_tokens: int = 4096
     cloned_repo_base_dir: str = str(Path.cwd())
+    max_iterations: int = MAX_ITERATIONS,
+
 
 
 # ─────────────────────────── LLM PROVIDERS ────────────────────────────
@@ -149,6 +151,7 @@ def create_agent_graph(
     tools: List[Tool],
     llm: LLMProviderBase,
     system_message: str,
+    cfg: AgentConfig,
     output_format: str | None = None,
 ):
     """Create a LangGraph agent with the provided tools and LLM."""
@@ -336,7 +339,7 @@ def create_agent_graph(
         if "#Final-Answer:" in last_message:
             return "format_output"
 
-        if state["iterations"] >= MAX_ITERATIONS:
+        if state["iterations"] >= cfg.max_iterations:
             # force the model to wrap up instead of ending the graph
             state["messages"].append(
                 {
@@ -395,7 +398,7 @@ class AgentFactory:
 
         llm = self._get_llm(cfg)
         tools = build_tools(index, llm, cfg)
-        agent_graph = create_agent_graph(tools, llm, system_prompt, output_format)
+        agent_graph = create_agent_graph(tools, llm, system_prompt, cfg, output_format)
 
         # Create a wrapper that mimics the AgentExecutor.run method
         class AgentGraphRunner:
@@ -416,12 +419,12 @@ class AgentFactory:
                 }
                 while True:
                     state = self.graph.invoke(
-                        state, {"recursion_limit": MAX_ITERATIONS}
+                        state, {"recursion_limit": cfg.max_iterations}
                     )  # one step
                     last = state["messages"][-1]["content"] if state["messages"] else ""
                     if (
                         "#Final-Answer:" in last
-                        or state["iterations"] >= MAX_ITERATIONS
+                        or state["iterations"] >= cfg.max_iterations
                     ):
                         break
 
@@ -442,6 +445,7 @@ def agent_query(
     MODEL_API_KEY: str = "",
     output_format: str | None = None,
     embedding: str = "SBERTEmbedding",
+    max_iterations: int = MAX_ITERATIONS,
 ):
     if LLMProvider.ANTHROPIC:
         os.environ["ANTHROPIC_API_KEY"] = MODEL_API_KEY
@@ -456,6 +460,7 @@ def agent_query(
         temperature=llm_temperature,
         max_tokens=llm_max_tokens,
         cloned_repo_base_dir=str(repo_index.path.parent),  # Use parent directory of index
+        max_iterations=max_iterations,
     )
     
     prompt_suffix = """
