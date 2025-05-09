@@ -7,8 +7,8 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-repo_url = "https://github.com/SyedGhazanferAnwar/Google-Drive-Search-Engine"
-branch = "master"
+repo_url = "https://github.com/ghazanferanwar/ru_twin/"
+branch = "main"
 # Forking
 index = clone_and_index(repo_url, branch=branch, embedding=EmbeddingMethod.SBERT, cloned_repo_base_dir="repos",should_push_to_repo=False)
 # print(x)
