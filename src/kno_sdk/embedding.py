@@ -230,7 +230,17 @@ def index_repo(
             for chunk in chunks:
                 texts.append(chunk[:TOKEN_LIMIT])
                 metas.append({"source": str(fp.relative_to(repo_path))})
-
+            
+            # For the chunk review / testing
+            
+            # review_file_path = os.path.join(kno_dir, "chunk_review.txt")
+            # with open(review_file_path, "a", encoding="utf-8") as review_file:
+            #     review_file.write(f"\n=== File: {fp.relative_to(repo_path)} ===\n")
+            #     for i, chunk in enumerate(chunks):
+            #         chunk_preview = chunk[:TOKEN_LIMIT]
+            #         review_file.write(f"\n-- Chunk {i + 1} --\n{chunk_preview}\n")
+            #         texts.append(chunk_preview)
+            #         metas.append({"source": str(fp.relative_to(repo_path))})
         vs.add_texts(texts=texts, metadatas=metas)
         logger.info("Embedded %d chunks", len(texts))
 
