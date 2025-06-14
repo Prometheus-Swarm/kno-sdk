@@ -512,7 +512,6 @@ def agent_query(
         f"\n\nRepository digest:\n{repo_index.digest}\n\n"
         f"{prompt_suffix}"
     )
-    print("NEW VERSION")
     agent = AgentFactory().create_agent(
         cfg,
         index=repo_index,

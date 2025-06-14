@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-repo_url = "https://github.com/koii-network/Koii-Global-Bootcamp"
+repo_url = "https://github.com/Prometheus-Swarm/prometheus-test"
 branch = "main"
 # Forking
 index = clone_and_index(repo_url, branch=branch, embedding=EmbeddingMethod.SBERT, cloned_repo_base_dir="repos",should_push_to_repo=False)
